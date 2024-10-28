@@ -1,30 +1,31 @@
-# app.py
+# streamlit_app.py
 import streamlit as st
 import pandas as pd
 from itertools import combinations
 
-# Title of the web app
-st.title("Pot Pairing and Grading Analysis")
+# Step 1: Streamlit app setup and file uploader
+st.title("Pot Pairing Grading App")
+st.write("Upload your CSV or Excel file containing pot data with 'Si', 'Fe', and 'CELL' columns.")
 
-# Step 1: Upload the file
-uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['csv', 'xlsx'])
+# Upload file
+uploaded_file = st.file_uploader("Choose a file", type=["csv", "xlsx"])
 
-if uploaded_file is not None:
-    # Step 2: Load the data
-    file_extension = uploaded_file.name.split('.')[-1]
-    if file_extension == 'csv':
+if uploaded_file:
+    # Load data based on file extension
+    if uploaded_file.name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
-    elif file_extension == 'xlsx':
+    elif uploaded_file.name.endswith('.xlsx'):
         df = pd.read_excel(uploaded_file)
+    
+    # Display the uploaded data
+    st.write("### Initial Data:")
+    st.dataframe(df.head())
 
-    st.write("Initial Data:")
-    st.write(df.head())
-
-    # Step 3: Convert Si and Fe columns to numeric
+    # Step 2: Convert Si and Fe columns to numeric
     df['Si'] = pd.to_numeric(df['Si'], errors='coerce')
     df['Fe'] = pd.to_numeric(df['Fe'], errors='coerce')
 
-    # Step 4: Define purity grading function
+    # Step 3: Define the grading function
     def calculate_grade(si, fe):
         if pd.isna(si) or pd.isna(fe):
             return None
@@ -47,66 +48,86 @@ if uploaded_file is not None:
         else:
             return 'Undefined'
 
-    # Apply grading function to each row
+    # Apply grading function
     df['grade'] = df.apply(lambda row: calculate_grade(row['Si'], row['Fe']), axis=1)
+    df = df.dropna(subset=['grade'])  # Drop rows where grade is None
 
-    # Drop rows with None values in the 'grade' column
-    df = df.dropna(subset=['grade'])
+    st.write("### Data with Calculated Grades:")
+    st.dataframe(df)
 
-    st.write("Data with Calculated Grades:")
-    st.write(df)
+    # Step 4: Pairing function
+    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050', 'Undefined']
 
-    # Step 5: Generate possible pot pairings and calculate their combined grades
-    def combined_grade(grade1, grade2):
-        grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050']
-        combined_index = max(grade_priority.index(grade1), grade_priority.index(grade2))
-        return grade_priority[combined_index]
-
-    # Generate all possible unique pairs of pots
-    pot_pairs = list(combinations(df['CELL'], 2))
-
-    # Calculate the resulting grade for each pair and save to a list of dictionaries
-    pair_results = []
-    for pair in pot_pairs:
-        pot1, pot2 = pair
-        grade1 = df[df['CELL'] == pot1]['grade'].values[0]
-        grade2 = df[df['CELL'] == pot2]['grade'].values[0]
-        result_grade = combined_grade(grade1, grade2)
+    def get_best_pair(pot, potential_partners):
+        pot_si = df[df['CELL'] == pot]['Si'].values[0]
+        pot_fe = df[df['CELL'] == pot]['Fe'].values[0]
         
-        pair_results.append({
-            'Pot1': pot1,
-            'Pot2': pot2,
-            'Grade1': grade1,
-            'Grade2': grade2,
-            'Combined_Grade': result_grade
-        })
+        best_grade = 'Undefined'
+        best_partner = None
+        for partner in potential_partners:
+            partner_si = df[df['CELL'] == partner]['Si'].values[0]
+            partner_fe = df[df['CELL'] == partner]['Fe'].values[0]
+            
+            avg_si = (pot_si + partner_si) / 2
+            avg_fe = (pot_fe + partner_fe) / 2
+            avg_grade = calculate_grade(avg_si, avg_fe)
+            
+            if avg_grade in grade_priority and grade_priority.index(avg_grade) < grade_priority.index(best_grade):
+                best_grade = avg_grade
+                best_partner = partner
+        
+        return best_partner, best_grade
 
-    # Convert the list to a DataFrame for easy analysis
-    pair_df = pd.DataFrame(pair_results)
-
-    # Step 6: Filter pairs by each grade and ensure each pot is only suggested once
-    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050']
-    selected_pots = set()
+    # Step 5: Pair selection and result display
+    unpaired_pots = set(df['CELL'])
     suggested_pairs = []
+    auto_trim_pots = df[df['grade'].isin(['0303', '0404'])]['CELL'].tolist()
+    paired_pots = set()
 
-    for grade in grade_priority:
-        pairs_for_grade = pair_df[(pair_df['Combined_Grade'] == grade)]
+    while auto_trim_pots:
+        pot = auto_trim_pots.pop(0)
+        potential_partners = [p for p in auto_trim_pots if df[df['CELL'] == p]['grade'].values[0] in ['0303', '0404']]
         
-        for _, row in pairs_for_grade.iterrows():
-            if row['Pot1'] not in selected_pots and row['Pot2'] not in selected_pots:
-                suggested_pairs.append({'Grade': grade, 'Pair': f"{row['Pot1']} & {row['Pot2']}"})
-                selected_pots.add(row['Pot1'])
-                selected_pots.add(row['Pot2'])
+        if potential_partners:
+            best_partner = potential_partners[0]
+            avg_si = (df[df['CELL'] == pot]['Si'].values[0] + df[df['CELL'] == best_partner]['Si'].values[0]) / 2
+            avg_fe = (df[df['CELL'] == pot]['Fe'].values[0] + df[df['CELL'] == best_partner]['Fe'].values[0]) / 2
+            combined_grade = calculate_grade(avg_si, avg_fe)
+            
+            suggested_pairs.append({
+                'Pot1': pot,
+                'Pot2': best_partner,
+                'Combined_Grade': combined_grade
+            })
+            
+            paired_pots.update([pot, best_partner])
+            auto_trim_pots.remove(best_partner)
+        else:
+            suggested_pairs.append({
+                'Pot1': pot,
+                'Pot2': None,
+                'Combined_Grade': 'Standalone 0303 or 0404'
+            })
+            paired_pots.add(pot)
 
-    # Convert the suggested pairs to a DataFrame
-    suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Grade', 'Pair'])
+    unpaired_pots = unpaired_pots - paired_pots
+    while unpaired_pots:
+        pot = unpaired_pots.pop()
+        potential_partners = list(unpaired_pots)
+        
+        if potential_partners:
+            best_partner, best_grade = get_best_pair(pot, potential_partners)
+            
+            if best_partner:
+                suggested_pairs.append({
+                    'Pot1': pot,
+                    'Pot2': best_partner,
+                    'Combined_Grade': best_grade
+                })
+                paired_pots.update([pot, best_partner])
+                unpaired_pots.remove(best_partner)
 
-    # Identify any remaining pots that were not paired
-    unpaired_pots = set(df['CELL']) - selected_pots
-    unpaired_data = pd.DataFrame([{'Grade': 'Unpaired', 'Pair': pot} for pot in unpaired_pots])
-
-    # Concatenate unpaired pots to the suggested pairs DataFrame
-    suggested_pairs_df = pd.concat([suggested_pairs_df, unpaired_data], ignore_index=True)
-
-    st.write("Suggested Pairings Table:")
-    st.write(suggested_pairs_df)
+    # Display the final pairing table
+    suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Pot1', 'Pot2', 'Combined_Grade'])
+    st.write("### Suggested Pairings Table:")
+    st.dataframe(suggested_pairs_df)
