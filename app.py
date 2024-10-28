@@ -1,11 +1,17 @@
 # streamlit_app.py
 import streamlit as st
 import pandas as pd
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
 import joblib
+
+# Model
+model = joblib.load('pot_pairing_model.pkl') 
 
 # Step 1: Streamlit app setup and file uploader
 st.title("Pot Pairing Grading App")
-st.write("Upload your CSV or Excel file containing pot data with 'Si', 'Fe', and 'CELL' columns.")
+st.write("Upload your CSV or Excel file containing pot data with 'CELL', 'Si', and 'Fe' columns.")
 
 # Upload file
 uploaded_file = st.file_uploader("Choose a file", type=["csv", "xlsx"])
@@ -25,15 +31,10 @@ if uploaded_file:
     df['Si'] = pd.to_numeric(df['Si'], errors='coerce')
     df['Fe'] = pd.to_numeric(df['Fe'], errors='coerce')
 
-    # Load the trained model and label encoder
-    model = joblib.load("pot_pairing_model.pkl")
-    label_encoder = joblib.load("label_encoder.pkl")
-
     # Step 3: Define the grading function
     def calculate_grade(si, fe):
         if pd.isna(si) or pd.isna(fe):
             return None
-        # Use the existing grading logic
         if si <= 0.03 and fe <= 0.03:
             return '0303'
         elif si <= 0.04 and fe <= 0.04:
@@ -53,97 +54,49 @@ if uploaded_file:
         else:
             return 'Undefined'
 
-    # Predict using the model for each pot and add to the DataFrame
-    def model_predict(si, fe):
-        # Standardize input features for the model
-        features = pd.DataFrame([[si, fe]], columns=['Avg_Si', 'Avg_Fe'])
-        predicted_grade = model.predict(features)[0]
-        return label_encoder.inverse_transform([predicted_grade])[0]
-
-    # Apply grading function and model prediction
+    # Apply grading function
     df['grade'] = df.apply(lambda row: calculate_grade(row['Si'], row['Fe']), axis=1)
-    df['model_grade'] = df.apply(lambda row: model_predict(row['Si'], row['Fe']), axis=1)
-    df = df.dropna(subset=['grade', 'model_grade'])  # Drop rows where grade is None
+    df = df.dropna(subset=['grade'])  # Drop rows where grade is None
 
-    st.write("### Data with Calculated Grades and Model Predictions:")
+    st.write("### Data with Calculated Grades:")
     st.dataframe(df)
 
-    # Step 4: Pairing function
-    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050', 'Undefined']
-
-    def get_best_pair(pot, potential_partners):
-        pot_si = df[df['CELL'] == pot]['Si'].values[0]
-        pot_fe = df[df['CELL'] == pot]['Fe'].values[0]
-        
-        best_grade = 'Undefined'
-        best_partner = None
-        for partner in potential_partners:
-            partner_si = df[df['CELL'] == partner]['Si'].values[0]
-            partner_fe = df[df['CELL'] == partner]['Fe'].values[0]
-            
-            avg_si = (pot_si + partner_si) / 2
-            avg_fe = (pot_fe + partner_fe) / 2
-            
-            # Use the model for combined predictions
-            avg_grade = model_predict(avg_si, avg_fe)
-            
-            if avg_grade in grade_priority and grade_priority.index(avg_grade) < grade_priority.index(best_grade):
-                best_grade = avg_grade
-                best_partner = partner
-        
-        return best_partner, best_grade
+    # Step 4: Prepare data for model prediction
+    def prepare_data_for_model(pot1_si, pot1_fe, pot2_si, pot2_fe):
+        avg_si = (pot1_si + pot2_si) / 2
+        avg_fe = (pot1_fe + pot2_fe) / 2
+        return pd.DataFrame([[pot1_si, pot1_fe, pot2_si, pot2_fe, avg_si, avg_fe]],
+                            columns=['Pot1_Si', 'Pot1_Fe', 'Pot2_Si', 'Pot2_Fe', 'Avg_Si', 'Avg_Fe'])
 
     # Step 5: Pair selection and result display
-    unpaired_pots = set(df['CELL'])
     suggested_pairs = []
-    auto_trim_pots = df[df['grade'].isin(['0303', '0404'])]['CELL'].tolist()
-    paired_pots = set()
+    unpaired_pots = set(df['CELL'])
+    
+    while len(unpaired_pots) > 1:
+        pot1 = unpaired_pots.pop()
+        pot1_si = df.loc[df['CELL'] == pot1, 'Si'].values[0]
+        pot1_fe = df.loc[df['CELL'] == pot1, 'Fe'].values[0]
 
-    while auto_trim_pots:
-        pot = auto_trim_pots.pop(0)
-        potential_partners = [p for p in auto_trim_pots if df[df['CELL'] == p]['grade'].values[0] in ['0303', '0404']]
-        
-        if potential_partners:
-            best_partner = potential_partners[0]
-            avg_si = (df[df['CELL'] == pot]['Si'].values[0] + df[df['CELL'] == best_partner]['Si'].values[0]) / 2
-            avg_fe = (df[df['CELL'] == pot]['Fe'].values[0] + df[df['CELL'] == best_partner]['Fe'].values[0]) / 2
+        # Find the next available pot for pairing
+        for pot2 in unpaired_pots:
+            pot2_si = df.loc[df['CELL'] == pot2, 'Si'].values[0]
+            pot2_fe = df.loc[df['CELL'] == pot2, 'Fe'].values[0]
             
-            combined_grade = model_predict(avg_si, avg_fe)
-            
-            suggested_pairs.append({
-                'Pot1': pot,
-                'Pot2': best_partner,
-                'Combined_Grade': combined_grade
-            })
-            
-            paired_pots.update([pot, best_partner])
-            auto_trim_pots.remove(best_partner)
-        else:
-            suggested_pairs.append({
-                'Pot1': pot,
-                'Pot2': None,
-                'Combined_Grade': 'Standalone 0303 or 0404'
-            })
-            paired_pots.add(pot)
+            # Prepare data for model prediction
+            model_input = prepare_data_for_model(pot1_si, pot1_fe, pot2_si, pot2_fe)
+            predicted_grade = model.predict(model_input)[0]
 
-    unpaired_pots = unpaired_pots - paired_pots
-    while unpaired_pots:
-        pot = unpaired_pots.pop()
-        potential_partners = list(unpaired_pots)
-        
-        if potential_partners:
-            best_partner, best_grade = get_best_pair(pot, potential_partners)
-            
-            if best_partner:
-                suggested_pairs.append({
-                    'Pot1': pot,
-                    'Pot2': best_partner,
-                    'Combined_Grade': best_grade
-                })
-                paired_pots.update([pot, best_partner])
-                unpaired_pots.remove(best_partner)
+            suggested_pairs.append({
+                'Pot1': pot1,
+                'Pot2': pot2,
+                'Predicted_Grade': predicted_grade
+            })
+
+            # Remove pot2 from unpaired pots as it has been paired
+            unpaired_pots.remove(pot2)
+            break  # Move to the next pot1
 
     # Display the final pairing table
-    suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Pot1', 'Pot2', 'Combined_Grade'])
+    suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Pot1', 'Pot2', 'Predicted_Grade'])
     st.write("### Suggested Pairings Table:")
     st.dataframe(suggested_pairs_df)
