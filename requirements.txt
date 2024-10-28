@@ -2,4 +2,4 @@ pandas
 streamlit
 openpyxl
 joblib
-sklearn
+scikit-learn
