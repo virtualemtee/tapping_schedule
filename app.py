@@ -103,3 +103,10 @@ if uploaded_file:
     # Display the final pairing table with the predicted grades
     st.write("### Suggested Pairings Table (sorted by predicted grade):")
     st.dataframe(sorted_pairs_df[['Pot1', 'Pot2', 'Predicted_Grade']])
+
+
+
+# Print the output in the console
+print("### Suggested Pairings and Predicted Grades:")
+for index, row in sorted_pairs_df.iterrows():
+    print(f"Pot 1: {row['Pot1']}, Pot 2: {row['Pot2']}, Predicted Grade: {row['Predicted_Grade']}")
