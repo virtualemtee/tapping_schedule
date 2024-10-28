@@ -90,28 +90,16 @@ if uploaded_file:
             suggested_pairs.append({
                 'Pot1': pot1,
                 'Pot2': pot2,
-                'Predicted_Grade': predicted_grade
+                'Predicted_Grade': predicted_grade  # Keep it as string
             })
 
     # Convert suggested pairs to DataFrame
     suggested_pairs_df = pd.DataFrame(suggested_pairs)
 
     # Sort by predicted grade to prioritize better purity grades
-    # Assuming a lower string value means better grade (e.g., '0303' < '0610')
-    grade_order = {
-        '0303': 1,
-        '0404': 2,
-        '0406': 3,
-        '0506': 4,
-        '0610': 5,
-        '1020': 6,
-        '1535': 7,
-        '2050': 8,
-        'Undefined': 9
-    }
-    suggested_pairs_df['Grade_Score'] = suggested_pairs_df['Predicted_Grade'].map(grade_order)
-    sorted_pairs_df = suggested_pairs_df.sort_values('Grade_Score').drop(columns='Grade_Score')
+    # Here we retain the original string values for display
+    sorted_pairs_df = suggested_pairs_df.sort_values('Predicted_Grade')
 
-    # Display the final pairing table
+    # Display the final pairing table with the predicted grades
     st.write("### Suggested Pairings Table (sorted by predicted grade):")
-    st.dataframe(sorted_pairs_df)
+    st.dataframe(sorted_pairs_df[['Pot1', 'Pot2', 'Predicted_Grade']])
