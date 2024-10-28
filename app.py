@@ -82,10 +82,6 @@ if uploaded_file:
                 best_grade = avg_grade
                 best_partner = partner
 
-                # Prioritize any `0303` or `0404` grade to ensure the best possible outcome
-                if best_grade in ['0303', '0404']:
-                    break
-        
         return best_partner, best_grade
 
     # Automated pairing logic
