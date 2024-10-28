@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 from itertools import combinations
@@ -72,20 +71,22 @@ if uploaded_file is not None:
         grade1 = df[df['CELL'] == pot1]['grade'].values[0]
         grade2 = df[df['CELL'] == pot2]['grade'].values[0]
         result_grade = combined_grade(grade1, grade2)
-        
-        pair_results.append({
-            'Pot1': pot1,
-            'Pot2': pot2,
-            'Grade1': grade1,
-            'Grade2': grade2,
-            'Combined_Grade': result_grade
-        })
+
+        # Only add the pair if the combined grade is at least 1020
+        if result_grade in ['1020', '0610', '0506', '0406', '0404', '0303']:
+            pair_results.append({
+                'Pot1': pot1,
+                'Pot2': pot2,
+                'Grade1': grade1,
+                'Grade2': grade2,
+                'Combined_Grade': result_grade
+            })
 
     # Convert the list to a DataFrame for easy analysis
     pair_df = pd.DataFrame(pair_results)
 
     # Step 6: Filter pairs by each grade and ensure each pot is only suggested once
-    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050']
+    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020']
     selected_pots = set()
     suggested_pairs = []
 
@@ -108,5 +109,5 @@ if uploaded_file is not None:
     # Concatenate unpaired pots to the suggested pairs DataFrame
     suggested_pairs_df = pd.concat([suggested_pairs_df, unpaired_data], ignore_index=True)
 
-    st.write("Suggested Pairings Table:")
+    st.write("Suggested Pairings Table (Prioritizing Higher Purities):")
     st.write(suggested_pairs_df)
