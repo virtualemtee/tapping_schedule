@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from itertools import combinations
@@ -55,48 +56,57 @@ if uploaded_file is not None:
     st.write("Data with Calculated Grades:")
     st.write(df)
 
-    # Step 5: Generate possible pot pairings and calculate their combined averages and grades
-    def average_grade(si1, fe1, si2, fe2):
-        avg_si = (si1 + si2) / 2
-        avg_fe = (fe1 + fe2) / 2
-        return calculate_grade(avg_si, avg_fe)
-
-    # Define the grades
-    high_purity_grades = ['0303', '0404']
-    mid_grades = ['0406', '0506', '0610', '1020']
-    low_grades = ['1535', '2050']
+    # Step 5: Generate possible pot pairings and calculate their combined grades
+    def combined_grade(grade1, grade2):
+        grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050']
+        combined_index = max(grade_priority.index(grade1), grade_priority.index(grade2))
+        return grade_priority[combined_index]
 
     # Generate all possible unique pairs of pots
     pot_pairs = list(combinations(df['CELL'], 2))
 
-    # Calculate the resulting average grade for each valid pair
+    # Calculate the resulting grade for each pair and save to a list of dictionaries
     pair_results = []
-    for pot1, pot2 in pot_pairs:
-        si1 = df.loc[df['CELL'] == pot1, 'Si'].values[0]
-        fe1 = df.loc[df['CELL'] == pot1, 'Fe'].values[0]
-        si2 = df.loc[df['CELL'] == pot2, 'Si'].values[0]
-        fe2 = df.loc[df['CELL'] == pot2, 'Fe'].values[0]
-
-        grade1 = df.loc[df['CELL'] == pot1, 'grade'].values[0]
-        grade2 = df.loc[df['CELL'] == pot2, 'grade'].values[0]
-
-        # Check if either of the pots has a low grade and if the other pot has a mid-range grade
-        if (grade1 in low_grades and grade2 in mid_grades) or (grade2 in low_grades and grade1 in mid_grades):
-            combined_grade = average_grade(si1, fe1, si2, fe2)
-            pair_results.append({
-                'Pot1': pot1,
-                'Pot2': pot2,
-                'Grade1': grade1,
-                'Grade2': grade2,
-                'Combined_Grade': combined_grade
-            })
+    for pair in pot_pairs:
+        pot1, pot2 = pair
+        grade1 = df[df['CELL'] == pot1]['grade'].values[0]
+        grade2 = df[df['CELL'] == pot2]['grade'].values[0]
+        result_grade = combined_grade(grade1, grade2)
+        
+        pair_results.append({
+            'Pot1': pot1,
+            'Pot2': pot2,
+            'Grade1': grade1,
+            'Grade2': grade2,
+            'Combined_Grade': result_grade
+        })
 
     # Convert the list to a DataFrame for easy analysis
     pair_df = pd.DataFrame(pair_results)
 
-    st.write("Improvement Pairings (Low Grades with Mid Grades):")
-    st.write(pair_df)
+    # Step 6: Filter pairs by each grade and ensure each pot is only suggested once
+    grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050']
+    selected_pots = set()
+    suggested_pairs = []
 
-    # Optional: Show all possible pairings for transparency
-    st.write("All Possible Pairings with Resulting Grades:")
-    st.write(pot_pairs)
+    for grade in grade_priority:
+        pairs_for_grade = pair_df[(pair_df['Combined_Grade'] == grade)]
+        
+        for _, row in pairs_for_grade.iterrows():
+            if row['Pot1'] not in selected_pots and row['Pot2'] not in selected_pots:
+                suggested_pairs.append({'Grade': grade, 'Pair': f"{row['Pot1']} & {row['Pot2']}"})
+                selected_pots.add(row['Pot1'])
+                selected_pots.add(row['Pot2'])
+
+    # Convert the suggested pairs to a DataFrame
+    suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Grade', 'Pair'])
+
+    # Identify any remaining pots that were not paired
+    unpaired_pots = set(df['CELL']) - selected_pots
+    unpaired_data = pd.DataFrame([{'Grade': 'Unpaired', 'Pair': pot} for pot in unpaired_pots])
+
+    # Concatenate unpaired pots to the suggested pairs DataFrame
+    suggested_pairs_df = pd.concat([suggested_pairs_df, unpaired_data], ignore_index=True)
+
+    st.write("Suggested Pairings Table:")
+    st.write(suggested_pairs_df)
