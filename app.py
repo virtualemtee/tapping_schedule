@@ -1,10 +1,9 @@
 # streamlit_app.py
 import streamlit as st
 import pandas as pd
-from itertools import combinations
 
 # Streamlit app setup and file uploader
-st.title("Optimized Pot Pairing Grading App")
+st.title("Enhanced Pot Pairing Grading App")
 st.write("Upload your CSV or Excel file containing pot data with 'Si', 'Fe', and 'CELL' columns.")
 
 # Upload file
@@ -58,31 +57,32 @@ if uploaded_file:
     # Priority list for grades
     grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050', 'Undefined']
 
-    def get_best_grade_pair(pot, available_pots):
+    def find_optimal_partner(pot, available_pots):
         """
-        Tries to find the best pairing for a pot that maximizes the priority grade.
-        If an optimal pairing for `0303` or `0404` is available, it prioritizes those.
+        Finds the optimal partner for a pot to maximize grade improvement.
+        It considers pairings that can result in higher-purity grades.
         """
-        pot_si = df[df['CELL'] == pot]['Si'].values[0]
-        pot_fe = df[df['CELL'] == pot]['Fe'].values[0]
+        pot_si = df.loc[df['CELL'] == pot, 'Si'].values[0]
+        pot_fe = df.loc[df['CELL'] == pot, 'Fe'].values[0]
         
         best_partner = None
         best_grade = 'Undefined'
         
         for partner in available_pots:
-            partner_si = df[df['CELL'] == partner]['Si'].values[0]
-            partner_fe = df[df['CELL'] == partner]['Fe'].values[0]
+            partner_si = df.loc[df['CELL'] == partner, 'Si'].values[0]
+            partner_fe = df.loc[df['CELL'] == partner, 'Fe'].values[0]
             
+            # Calculate average Si and Fe for the pairing
             avg_si = (pot_si + partner_si) / 2
             avg_fe = (pot_fe + partner_fe) / 2
             avg_grade = calculate_grade(avg_si, avg_fe)
             
-            # Prioritize pairings that achieve the best available grade
+            # Choose pairing that achieves the highest-priority grade
             if avg_grade in grade_priority and grade_priority.index(avg_grade) < grade_priority.index(best_grade):
                 best_grade = avg_grade
                 best_partner = partner
 
-                # Stop if we reach optimal top grades
+                # Prioritize any `0303` or `0404` grade to ensure the best possible outcome
                 if best_grade in ['0303', '0404']:
                     break
         
@@ -94,10 +94,10 @@ if uploaded_file:
     auto_trim_pots = df[df['grade'].isin(['0303', '0404'])]['CELL'].tolist()
     paired_pots = set()
 
-    # Step 1: Attempt to pair all `0303` or `0404` cells first for optimal grades
+    # Step 1: Attempt to optimize pairs for high purity (like `0303`, `0404`)
     while auto_trim_pots:
         pot = auto_trim_pots.pop(0)
-        best_partner, combined_grade = get_best_grade_pair(pot, auto_trim_pots)
+        best_partner, combined_grade = find_optimal_partner(pot, auto_trim_pots)
         
         if best_partner:
             suggested_pairs.append({
@@ -115,16 +115,14 @@ if uploaded_file:
             })
             paired_pots.add(pot)
 
-    # Remove already paired pots from the list of unpaired pots
+    # Step 2: Pair remaining pots aiming for the best available grade
     unpaired_pots -= paired_pots
-    
-    # Step 2: Pair remaining pots with the highest available grade
     while unpaired_pots:
         pot = unpaired_pots.pop()
         remaining_pots = list(unpaired_pots)
         
         if remaining_pots:
-            best_partner, best_grade = get_best_grade_pair(pot, remaining_pots)
+            best_partner, best_grade = find_optimal_partner(pot, remaining_pots)
             
             if best_partner:
                 suggested_pairs.append({
