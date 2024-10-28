@@ -2,8 +2,8 @@
 import streamlit as st
 import pandas as pd
 
-# Step 1: Streamlit app setup and file uploader
-st.title("Pot Pairing Grading App")
+# Streamlit app setup and file uploader
+st.title("Enhanced Pot Pairing Grading App")
 st.write("Upload your CSV or Excel file containing pot data with 'Si', 'Fe', and 'CELL' columns.")
 
 # Upload file
@@ -20,11 +20,11 @@ if uploaded_file:
     st.write("### Initial Data:")
     st.dataframe(df.head())
 
-    # Step 2: Convert Si and Fe columns to numeric
+    # Convert Si and Fe columns to numeric
     df['Si'] = pd.to_numeric(df['Si'], errors='coerce')
     df['Fe'] = pd.to_numeric(df['Fe'], errors='coerce')
 
-    # Step 3: Define the grading function
+    # Define the grading function
     def calculate_grade(si, fe):
         if pd.isna(si) or pd.isna(fe):
             return None
@@ -54,51 +54,53 @@ if uploaded_file:
     st.write("### Data with Calculated Grades:")
     st.dataframe(df)
 
-    # Step 4: Pairing function
+    # Priority list for grades
     grade_priority = ['0303', '0404', '0406', '0506', '0610', '1020', '1535', '2050', 'Undefined']
 
-    def get_best_pair(pot, potential_partners):
-        pot_si = df[df['CELL'] == pot]['Si'].values[0]
-        pot_fe = df[df['CELL'] == pot]['Fe'].values[0]
+    def find_optimal_partner(pot, available_pots):
+        """
+        Finds the optimal partner for a pot to maximize grade improvement.
+        It considers pairings that can result in higher-purity grades.
+        """
+        pot_si = df.loc[df['CELL'] == pot, 'Si'].values[0]
+        pot_fe = df.loc[df['CELL'] == pot, 'Fe'].values[0]
         
-        best_grade = 'Undefined'
         best_partner = None
-        for partner in potential_partners:
-            partner_si = df[df['CELL'] == partner]['Si'].values[0]
-            partner_fe = df[df['CELL'] == partner]['Fe'].values[0]
+        best_grade = 'Undefined'
+        
+        for partner in available_pots:
+            partner_si = df.loc[df['CELL'] == partner, 'Si'].values[0]
+            partner_fe = df.loc[df['CELL'] == partner, 'Fe'].values[0]
             
+            # Calculate average Si and Fe for the pairing
             avg_si = (pot_si + partner_si) / 2
             avg_fe = (pot_fe + partner_fe) / 2
             avg_grade = calculate_grade(avg_si, avg_fe)
             
+            # Choose pairing that achieves the highest-priority grade
             if avg_grade in grade_priority and grade_priority.index(avg_grade) < grade_priority.index(best_grade):
                 best_grade = avg_grade
                 best_partner = partner
-        
+
         return best_partner, best_grade
 
-    # Step 5: Pair selection and result display
+    # Automated pairing logic
     unpaired_pots = set(df['CELL'])
     suggested_pairs = []
     auto_trim_pots = df[df['grade'].isin(['0303', '0404'])]['CELL'].tolist()
     paired_pots = set()
 
+    # Step 1: Attempt to optimize pairs for high purity (like `0303`, `0404`)
     while auto_trim_pots:
         pot = auto_trim_pots.pop(0)
-        potential_partners = [p for p in auto_trim_pots if df[df['CELL'] == p]['grade'].values[0] in ['0303', '0404']]
+        best_partner, combined_grade = find_optimal_partner(pot, auto_trim_pots)
         
-        if potential_partners:
-            best_partner = potential_partners[0]
-            avg_si = (df[df['CELL'] == pot]['Si'].values[0] + df[df['CELL'] == best_partner]['Si'].values[0]) / 2
-            avg_fe = (df[df['CELL'] == pot]['Fe'].values[0] + df[df['CELL'] == best_partner]['Fe'].values[0]) / 2
-            combined_grade = calculate_grade(avg_si, avg_fe)
-            
+        if best_partner:
             suggested_pairs.append({
                 'Pot1': pot,
                 'Pot2': best_partner,
                 'Combined_Grade': combined_grade
             })
-            
             paired_pots.update([pot, best_partner])
             auto_trim_pots.remove(best_partner)
         else:
@@ -109,14 +111,14 @@ if uploaded_file:
             })
             paired_pots.add(pot)
 
-    unpaired_pots = unpaired_pots - paired_pots
-    standalone_pots = list(unpaired_pots)  # Collect unpaired pots for display
+    # Step 2: Pair remaining pots aiming for the best available grade
+    unpaired_pots -= paired_pots
     while unpaired_pots:
         pot = unpaired_pots.pop()
-        potential_partners = list(unpaired_pots)
+        remaining_pots = list(unpaired_pots)
         
-        if potential_partners:
-            best_partner, best_grade = get_best_pair(pot, potential_partners)
+        if remaining_pots:
+            best_partner, best_grade = find_optimal_partner(pot, remaining_pots)
             
             if best_partner:
                 suggested_pairs.append({
@@ -126,13 +128,8 @@ if uploaded_file:
                 })
                 paired_pots.update([pot, best_partner])
                 unpaired_pots.remove(best_partner)
-
-    # Display the final pairing table
+    
+    # Display the final optimized pairing table
     suggested_pairs_df = pd.DataFrame(suggested_pairs, columns=['Pot1', 'Pot2', 'Combined_Grade'])
-    st.write("### Suggested Pairings Table:")
+    st.write("### Optimized Suggested Pairings Table:")
     st.dataframe(suggested_pairs_df)
-
-    # Display standalone pots that couldn't be paired
-    standalone_pots_df = pd.DataFrame(standalone_pots, columns=['Standalone Pots'])
-    st.write("### Standalone Pots (could not be paired):")
-    st.dataframe(standalone_pots_df)
