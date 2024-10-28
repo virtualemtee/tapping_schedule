@@ -43,7 +43,7 @@ if uploaded_file:
             return '1020'
         elif si <= 0.15 and fe <= 0.35:
             return '1535'
-        elif si >= 0.20 or fe >= 0.50:
+        elif si >= 0.15 or fe >= 0.35:
             return '2050'
         else:
             return 'Undefined'
