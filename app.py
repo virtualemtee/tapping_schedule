@@ -297,5 +297,3 @@ if uploaded_file is not None:
 
     else:
         st.error("Uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
-
-
