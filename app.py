@@ -27,7 +27,7 @@ def assign_grade(si, fe):
         return '1535'
     elif si >= 0.15 or fe >= 0.35:
         return '2050'
-    return None  # Fallback in case of unexpected values
+    return None
 
 # Streamlit app layout
 st.title("Material Grading Application")
@@ -46,64 +46,51 @@ if uploaded_file is not None:
 
     # Ensure necessary columns are present
     if 'CELL' in data.columns and 'Si' in data.columns and 'Fe' in data.columns:
-        # Fill missing values with zeros and filter out rows with zero values
-        data = data[(data['Si'].notnull()) & (data['Fe'].notnull()) & (data['Si'] > 0) & (data['Fe'] > 0)]
+        # Fill missing values with zeros and filter out invalid rows
+        data['Si'] = data['Si'].fillna(0)
+        data['Fe'] = data['Fe'].fillna(0)
+        filtered_data = data[(data['Si'] > 0) & (data['Fe'] > 0)]
 
-        # Apply grading function to each row
-        data['Grade'] = data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
+        # Apply grading function to each row of filtered data
+        filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
 
-        # Generate combinations of the cells
-        cell_combinations = list(combinations(data.index, 2))
-        combination_results = []
+        # Display results for individual cells
+        st.write("Grading Results for Individual Cells:")
+        st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
 
-        for (i, j) in cell_combinations:
-            avg_si = (data.at[i, 'Si'] + data.at[j, 'Si']) / 2
-            avg_fe = (data.at[i, 'Fe'] + data.at[j, 'Fe']) / 2
-            combined_grade = assign_grade(avg_si, avg_fe)
-            combination_results.append({
-                'Cell_A': data.at[i, 'CELL'],
-                'Cell_B': data.at[j, 'CELL'],
-                'Avg_Si': avg_si,
-                'Avg_Fe': avg_fe,
-                'Combined_Grade': combined_grade
-            })
+        # Prepare to compute averages for combinations
+        combination_data = []
+        for index, row in filtered_data.iterrows():
+            cell_id = row['CELL']
+            si_a = row['Si']
+            fe_a = row['Fe']
+            # Create combinations with all other cells
+            for _, other_row in filtered_data[filtered_data['CELL'] != cell_id].iterrows():
+                si_b = other_row['Si']
+                fe_b = other_row['Fe']
+                avg_si = (si_a + si_b) / 2
+                avg_fe = (fe_a + fe_b) / 2
+                combined_grade = assign_grade(avg_si, avg_fe)
+                combination_data.append({
+                    "Cell_A": cell_id,
+                    "Cell_B": other_row['CELL'],
+                    "Avg_Si": avg_si,
+                    "Avg_Fe": avg_fe,
+                    "Combined_Grade": combined_grade
+                })
 
-        combination_df = pd.DataFrame(combination_results)
+        # Create a DataFrame for combination results
+        combinations_df = pd.DataFrame(combination_data)
 
-        # Pair cells based on the best grade without repeating cells
-        paired_cells = {}
-        unpaired_cells = set(data['CELL'])  # Start with all cells as unpaired
+        # Display combination results
+        st.write("Grading Results for Combinations:")
+        st.dataframe(combinations_df)
 
-        for _, row in combination_df.iterrows():
-            cell_a = row['Cell_A']
-            cell_b = row['Cell_B']
-            combined_grade = row['Combined_Grade']
-
-            # If neither cell has been paired yet, pair them
-            if cell_a not in paired_cells and cell_b not in paired_cells:
-                paired_cells[cell_a] = cell_b
-                unpaired_cells.discard(cell_a)
-                unpaired_cells.discard(cell_b)
-
-        # Convert paired_cells to a DataFrame for better visualization
-        paired_df = pd.DataFrame(list(paired_cells.items()), columns=['Cell', 'Paired_With'])
-
-        # Display results
-        st.write("Grading Results:")
-        st.dataframe(data[['CELL', 'Si', 'Fe', 'Grade']])
-
-        st.write("Optimal Pairings Based on Combinations:")
-        st.dataframe(paired_df)
-
-        if unpaired_cells:
-            st.write("Unpaired Cells:")
-            st.write(list(unpaired_cells))
-        
         # Save results to an Excel file in memory
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            data.to_excel(writer, index=False, sheet_name='Grading Results')
-            paired_df.to_excel(writer, index=False, sheet_name='Optimal Pairings')
+            filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
+            combinations_df.to_excel(writer, index=False, sheet_name='Combination Grading Results')
         output.seek(0)
 
         # Add download button
