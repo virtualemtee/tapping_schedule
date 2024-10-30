@@ -1,112 +1,38 @@
-# streamlit_app.py
+# Streamlit app imports
 import streamlit as st
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
 import joblib
+from itertools import combinations
 
-# Load the trained model and label encoder
-model = joblib.load('pot_pairing_model.pkl')
+# Load model and label encoder
+model = joblib.load("paired_model.pkl")
 label_encoder = joblib.load("label_encoder.pkl")
 
-# Streamlit app setup
-st.title("Pot Pairing Grading App")
-st.write("Upload your CSV or Excel file containing pot data with 'CELL', 'Si', and 'Fe' columns.")
+st.title("Potline Cell Pairing Recommendation")
 
-# Upload file
-uploaded_file = st.file_uploader("Choose a file", type=["csv", "xlsx"])
-
+# Upload the Excel file
+uploaded_file = st.file_uploader("Upload Cell Data", type=["xlsx"])
 if uploaded_file:
-    # Load data based on file extension
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    elif uploaded_file.name.endswith('.xlsx'):
-        df = pd.read_excel(uploaded_file)
-    
-    # Display the uploaded data
-    st.write("### Initial Data:")
-    st.dataframe(df.head())
+    data = pd.read_excel(uploaded_file)
+    data.columns = ["Cell", "Si", "Fe"]
 
-    # Convert Si and Fe columns to numeric
-    df['Si'] = pd.to_numeric(df['Si'], errors='coerce')
-    df['Fe'] = pd.to_numeric(df['Fe'], errors='coerce')
+    sections = {1: data[data['Cell'].between(1, 25)],
+                2: data[data['Cell'].between(26, 50)],
+                3: data[data['Cell'].between(51, 75)],
+                4: data[data['Cell'].between(76, 100)]}
 
-    # Define the grading function
-    def calculate_grade(si, fe):
-        if pd.isna(si) or pd.isna(fe):
-            return None
-        # Use existing grading logic
-        if si <= 0.03 and fe <= 0.03:
-            return '0303'
-        elif si <= 0.04 and fe <= 0.04:
-            return '0404'
-        elif si <= 0.04 and fe <= 0.06:
-            return '0406'
-        elif si <= 0.05 and fe <= 0.06:
-            return '0506'
-        elif si <= 0.06 and fe <= 0.10:
-            return '0610'
-        elif si <= 0.10 and fe <= 0.20:
-            return '1020'
-        elif si <= 0.15 and fe <= 0.35:
-            return '1535'
-        elif si >= 0.15 or fe >= 0.35:
-            return '2050'
-        else:
-            return 'Undefined'
+    best_pairs = []
 
-    # Apply grading function
-    df['grade'] = df.apply(lambda row: calculate_grade(row['Si'], row['Fe']), axis=1)
-    df = df.dropna(subset=['grade'])  # Drop rows where grade is None
+    for section_id, cells in sections.items():
+        cells = cells.dropna()
+        for cell1, cell2 in combinations(cells['Cell'].unique(), 2):
+            si1, fe1 = cells.loc[cells['Cell'] == cell1, ["Si", "Fe"]].values[0]
+            si2, fe2 = cells.loc[cells['Cell'] == cell2, ["Si", "Fe"]].values[0]
+            avg_si, avg_fe = (si1 + si2) / 2, (fe1 + fe2) / 2
 
-    st.write("### Data with Calculated Grades:")
-    st.dataframe(df)
+            pred = model.predict([[si1, fe1, si2, fe2, avg_si, avg_fe]])
+            grade = label_encoder.inverse_transform(pred)[0]
+            best_pairs.append((cell1, cell2, grade))
 
-    # Prepare data for model prediction
-    def prepare_data_for_model(pot1_si, pot1_fe, pot2_si, pot2_fe):
-        avg_si = (pot1_si + pot2_si) / 2
-        avg_fe = (pot1_fe + pot2_fe) / 2
-        return pd.DataFrame([[pot1_si, pot1_fe, pot2_si, pot2_fe, avg_si, avg_fe]],
-                            columns=['Pot1_Si', 'Pot1_Fe', 'Pot2_Si', 'Pot2_Fe', 'Avg_Si', 'Avg_Fe'])
-
-    # Collect all suggested pairs with grades
-    suggested_pairs = []
-    pot_cells = df['CELL'].tolist()
-
-    # Iterate through all pairs of pots
-    for i in range(len(pot_cells)):
-        for j in range(i + 1, len(pot_cells)):
-            pot1 = pot_cells[i]
-            pot2 = pot_cells[j]
-
-            pot1_si = df.loc[df['CELL'] == pot1, 'Si'].values[0]
-            pot1_fe = df.loc[df['CELL'] == pot1, 'Fe'].values[0]
-            pot2_si = df.loc[df['CELL'] == pot2, 'Si'].values[0]
-            pot2_fe = df.loc[df['CELL'] == pot2, 'Fe'].values[0]
-            
-            # Prepare data for model prediction
-            model_input = prepare_data_for_model(pot1_si, pot1_fe, pot2_si, pot2_fe)
-            predicted_grade = model.predict(model_input)[0]
-
-            suggested_pairs.append({
-                'Pot1': pot1,
-                'Pot2': pot2,
-                'Predicted_Grade': predicted_grade  # Keep it as string
-            })
-
-    # Convert suggested pairs to DataFrame
-    suggested_pairs_df = pd.DataFrame(suggested_pairs)
-
-    # Sort by predicted grade to prioritize better purity grades
-    # Here we retain the original string values for display
-    sorted_pairs_df = suggested_pairs_df.sort_values('Predicted_Grade')
-
-    # Display the final pairing table with the predicted grades
-    st.write("### Suggested Pairings Table (sorted by predicted grade):")
-    st.dataframe(sorted_pairs_df[['Pot1', 'Pot2', 'Predicted_Grade']])
-
-
-
-# Print the output in the console
-print("### Suggested Pairings and Predicted Grades:")
-for index, row in sorted_pairs_df.iterrows():
-    print(f"Pot 1: {row['Pot1']}, Pot 2: {row['Pot2']}, Predicted Grade: {row['Predicted_Grade']}")
+    st.write("Suggested Pairs:")
+    st.write(best_pairs)
