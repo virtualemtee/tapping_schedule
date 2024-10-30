@@ -61,6 +61,8 @@ if uploaded_file is not None:
         closest_improving_data = []
         pairable_grades_data = []
 
+        used_cells = set()  # Set to track used cells
+
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -68,7 +70,7 @@ if uploaded_file is not None:
             individual_grade = row['Grade']
 
             # Focus only on poor grades
-            if individual_grade in ['1535', '2050']:
+            if individual_grade in ['1535', '2050'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
                 best_distance = float('inf')  # Start with infinity
@@ -80,8 +82,8 @@ if uploaded_file is not None:
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
-                    # Check if the other cell is an acceptable grade
-                    if other_grade in ['0506', '0610', '1020']:
+                    # Check if the other cell is an acceptable grade and not already used
+                    if other_grade in ['0506', '0610', '1020'] and other_cell_id not in used_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
@@ -102,8 +104,8 @@ if uploaded_file is not None:
                         fe_b = other_row['Fe']
                         other_grade = other_row['Grade']
                         
-                        # Only pair with other poor grades
-                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id:
+                        # Only pair with other poor grades and not already used
+                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id and other_cell_id not in used_cells:
                             avg_si = (si_a + si_b) / 2
                             avg_fe = (fe_a + fe_b) / 2
                             combined_grade = assign_grade(avg_si, avg_fe)
@@ -123,9 +125,12 @@ if uploaded_file is not None:
                         "Improving_Cell": best_pairing,
                         "Resultant_Grade": best_combined_grade
                     })
+                    # Mark both cells as used
+                    used_cells.add(cell_id)
+                    used_cells.add(best_pairing)
 
             # Focus on pairable grades: 0303, 0404, 0406
-            if individual_grade in ['0303', '0404', '0406']:
+            if individual_grade in ['0303', '0404', '0406'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
                 best_distance = float('inf')  # Start with infinity
@@ -137,8 +142,8 @@ if uploaded_file is not None:
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
-                    # Only consider pairing within 0303, 0404, 0406
-                    if other_grade in ['0303', '0404', '0406'] and other_cell_id != cell_id:
+                    # Only consider pairing within 0303, 0404, 0406 and not already used
+                    if other_grade in ['0303', '0404', '0406'] and other_cell_id != cell_id and other_cell_id not in used_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
@@ -158,6 +163,9 @@ if uploaded_file is not None:
                         "Pairable_Cell": best_pairing,
                         "Resultant_Grade": best_combined_grade
                     })
+                    # Mark both cells as used
+                    used_cells.add(cell_id)
+                    used_cells.add(best_pairing)
 
         # Create DataFrames for results
         closest_improving_df = pd.DataFrame(closest_improving_data)
