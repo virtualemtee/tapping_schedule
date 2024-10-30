@@ -50,8 +50,8 @@ if uploaded_file is not None:
         data['Fe'] = data['Fe'].fillna(0)
         filtered_data = data[(data['Si'] > 0) & (data['Fe'] > 0)]
 
-        # Apply grading function to each row of filtered data
-        filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
+        # Apply grading function to each row of filtered data using .loc
+        filtered_data.loc[:, 'Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
 
         # Display results for individual cells
         st.write("Grading Results for Individual Cells:")
