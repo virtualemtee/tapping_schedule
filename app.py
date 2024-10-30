@@ -60,11 +60,10 @@ if uploaded_file is not None:
         # Prepare to compute averages for combinations
         closest_improving_data = []
         pairable_grades_data = []
-        acceptable_grades_data = []
-
         used_cells = set()  # Set to track used cells
+        unpaired_cells = []  # List to track unpaired cells
 
-        # Step 1: Pair poor grades with acceptable grades
+        # First pass: Handle poor grades
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -131,82 +130,112 @@ if uploaded_file is not None:
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Step 2: Pair acceptable grades among themselves or with better poor grades
+        # Second pass: Handle acceptable grades
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
             individual_grade = row['Grade']
 
-            # Only consider acceptable grades that haven't been used
+            # Handle only acceptable grades
             if individual_grade in ['0506', '0610', '1020'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
                 best_distance = float('inf')  # Start with infinity
-
-                # Check for pairings with other acceptable grades
+                
+                # Try to pair with other acceptable grades first
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
-                    # Only pair with other acceptable grades not already used
+                    # Only consider pairing within acceptable grades and not already used
                     if other_grade in ['0506', '0610', '1020'] and other_cell_id != cell_id and other_cell_id not in used_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
 
-                        distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
-                        if distance < best_distance:
-                            best_distance = distance
-                            best_pairing = other_cell_id
-                            best_combined_grade = combined_grade
-                
-                # Append the closest pairing found if applicable
+                        # Update if this combination stays acceptable
+                        if combined_grade in ['0506', '0610', '1020']:
+                            distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_pairing = other_cell_id
+                                best_combined_grade = combined_grade
+
+                # If no acceptable pair found, try to pair with non-improved grades
+                if best_pairing is None:
+                    for _, other_row in filtered_data.iterrows():
+                        other_cell_id = other_row['CELL']
+                        si_b = other_row['Si']
+                        fe_b = other_row['Fe']
+                        other_grade = other_row['Grade']
+                        
+                        # Only pair with non-improved grades and not already used
+                        if other_grade in ['0303', '0404', '0406'] and other_cell_id != cell_id and other_cell_id not in used_cells:
+                            avg_si = (si_a + si_b) / 2
+                            avg_fe = (fe_a + fe_b) / 2
+                            combined_grade = assign_grade(avg_si, avg_fe)
+
+                            # Only track if it remains an acceptable grade
+                            if combined_grade in ['0506', '0610', '1020']:
+                                distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                                if distance < best_distance:
+                                    best_distance = distance
+                                    best_pairing = other_cell_id
+                                    best_combined_grade = combined_grade
+
+                # Append the closest acceptable pairing if found
                 if best_pairing is not None:
-                    acceptable_grades_data.append({
-                        "Base_Cell": cell_id,
-                        "Pairable_Cell": best_pairing,
+                    pairable_grades_data.append({
+                        "Acceptable_Cell": cell_id,
+                        "Pairing_Cell": best_pairing,
                         "Resultant_Grade": best_combined_grade
                     })
                     # Mark both cells as used
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Create DataFrames for results
-        closest_improving_df = pd.DataFrame(closest_improving_data)
-        pairable_grades_df = pd.DataFrame(pairable_grades_data)
-        acceptable_grades_df = pd.DataFrame(acceptable_grades_data)
+        # Third pass: Handle non-improved grades
+        for index, row in filtered_data.iterrows():
+            cell_id = row['CELL']
+            individual_grade = row['Grade']
 
-        # Display closest improving results
-        st.write("Closest Cells that Improve Poor Grades:")
-        st.dataframe(closest_improving_df)
+            # If a cell is not paired and is a non-improved grade
+            if individual_grade in ['0303', '0404', '0406'] and cell_id not in used_cells:
+                unpaired_cells.append({"Cell": cell_id, "Grade": individual_grade})
 
-        # Display pairable grades results
-        st.write("Pairable Grades among 0303, 0404, and 0406:")
-        st.dataframe(pairable_grades_df)
+        # Combine all results for final display
+        st.write("Results for Poor Grades Improved:")
+        if closest_improving_data:
+            st.dataframe(pd.DataFrame(closest_improving_data))
+        else:
+            st.write("No poor grades were improved.")
 
-        # Display acceptable grades results
-        st.write("Pairable Acceptable Grades:")
-        st.dataframe(acceptable_grades_df)
+        st.write("Results for Acceptable Grades:")
+        if pairable_grades_data:
+            st.dataframe(pd.DataFrame(pairable_grades_data))
+        else:
+            st.write("No acceptable grades were paired.")
 
-        # Save results to an Excel file in memory
+        st.write("Unpaired Cells:")
+        if unpaired_cells:
+            st.dataframe(pd.DataFrame(unpaired_cells))
+        else:
+            st.write("All cells have been paired successfully.")
+
+        # Optionally, save results to an Excel file
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
-            closest_improving_df.to_excel(writer, index=False, sheet_name='Closest Improving Results')
-            pairable_grades_df.to_excel(writer, index=False, sheet_name='Pairable Grades')
-            acceptable_grades_df.to_excel(writer, index=False, sheet_name='Acceptable Grades')
-        output.seek(0)
-
-        # Add download button
+            pd.DataFrame(closest_improving_data).to_excel(writer, sheet_name='Poor Grades Improved', index=False)
+            pd.DataFrame(pairable_grades_data).to_excel(writer, sheet_name='Acceptable Grades', index=False)
+            pd.DataFrame(unpaired_cells).to_excel(writer, sheet_name='Unpaired Cells', index=False)
         st.download_button(
             label="Download Grading Results",
-            data=output,
+            data=output.getvalue(),
             file_name='grading_results.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-
     else:
         st.error("The uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
