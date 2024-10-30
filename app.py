@@ -60,6 +60,7 @@ if uploaded_file is not None:
         # Prepare to compute averages for combinations
         closest_improving_data = []
         pairable_grades_data = []
+        acceptable_grades_data = []
 
         used_cells = set()  # Set to track used cells
 
@@ -167,33 +168,73 @@ if uploaded_file is not None:
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Create DataFrames for results
-        closest_improving_df = pd.DataFrame(closest_improving_data)
-        pairable_grades_df = pd.DataFrame(pairable_grades_data)
+            # Focus on acceptable grades: 0506, 0610, 1020
+            if individual_grade in ['0506', '0610', '1020'] and cell_id not in used_cells:
+                best_pairing = None
+                best_combined_grade = None
+                best_distance = float('inf')  # Start with infinity
+                
+                # Create combinations among themselves
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
 
-        # Display closest improving results
-        st.write("Closest Cells that Improve Poor Grades:")
-        st.dataframe(closest_improving_df)
+                    # Only consider pairing within 0506, 0610, 1020 and not already used
+                    if other_grade in ['0506', '0610', '1020'] and other_cell_id != cell_id and other_cell_id not in used_cells:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
 
-        # Display pairable grades results
-        st.write("Pairable Grades among 0303, 0404, and 0406:")
-        st.dataframe(pairable_grades_df)
+                        # Track this pairing
+                        distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                        if distance < best_distance:
+                            best_distance = distance
+                            best_pairing = other_cell_id
+                            best_combined_grade = combined_grade
 
-        # Save results to an Excel file in memory
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
-            closest_improving_df.to_excel(writer, index=False, sheet_name='Closest Improving Results')
-            pairable_grades_df.to_excel(writer, index=False, sheet_name='Pairable Grades')
-        output.seek(0)
+                # Append the closest pairing found if applicable
+                if best_pairing is not None:
+                    acceptable_grades_data.append({
+                        "Base_Cell": cell_id,
+                        "Pairable_Cell": best_pairing,
+                        "Resultant_Grade": best_combined_grade
+                    })
+                    # Mark both cells as used
+                    used_cells.add(cell_id)
+                    used_cells.add(best_pairing)
 
-        # Add download button
+        # Display results
+        st.write("Closest Pairs that Improved Poor Grades:")
+        if closest_improving_data:
+            closest_improving_df = pd.DataFrame(closest_improving_data)
+            st.dataframe(closest_improving_df)
+
+        st.write("Pairs within Non-improving Grades (0303, 0404, 0406):")
+        if pairable_grades_data:
+            pairable_grades_df = pd.DataFrame(pairable_grades_data)
+            st.dataframe(pairable_grades_df)
+
+        st.write("Pairs within Acceptable Grades (0506, 0610, 1020):")
+        if acceptable_grades_data:
+            acceptable_grades_df = pd.DataFrame(acceptable_grades_data)
+            st.dataframe(acceptable_grades_df)
+
+        # Optionally, save results to an Excel file
+        output_file = BytesIO()
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            closest_improving_df.to_excel(writer, sheet_name='Closest_Pairs_Improved', index=False)
+            pairable_grades_df.to_excel(writer, sheet_name='Non_Improving_Pairs', index=False)
+            acceptable_grades_df.to_excel(writer, sheet_name='Acceptable_Pairs', index=False)
+
+        output_file.seek(0)
+
         st.download_button(
             label="Download Grading Results",
-            data=output,
+            data=output_file,
             file_name='grading_results.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-
     else:
-        st.error("Uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
+        st.error("Please upload a file containing 'CELL', 'Si', and 'Fe' columns.")
