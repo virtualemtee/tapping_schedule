@@ -53,35 +53,45 @@ if uploaded_file is not None:
         # Apply grading function to each row of filtered data
         filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
 
+        # Display results for individual cells
+        st.write("Grading Results for Individual Cells:")
+        st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
+
         # Prepare to compute averages for combinations
-        suggested_schedule = []
-        standalone_cells = []
+        closest_improving_data = []
+        pairable_grades_data = []
+        acceptable_pairings_data = []
+        remaining_cells = []
+        additional_pairings = []  # To store additional pairings between acceptable and non-improved
         used_cells = set()  # Set to track used cells
 
-        # Pairing logic remains the same as before
-        # First pass: Poor Grades (1535 and 2050)
+        # First pass: Focus on poor grades
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
             individual_grade = row['Grade']
 
+            # Focus only on poor grades
             if individual_grade in ['1535', '2050'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
                 best_distance = float('inf')  # Start with infinity
                 
+                # Create combinations with acceptable grades
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
+                    # Check if the other cell is an acceptable grade and not already used
                     if other_grade in ['0506', '0610', '1020'] and other_cell_id not in used_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
 
+                        # Update if this combination improves the grade
                         if combined_grade not in ['1535', '2050']:
                             distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
                             if distance < best_distance:
@@ -89,18 +99,21 @@ if uploaded_file is not None:
                                 best_pairing = other_cell_id
                                 best_combined_grade = combined_grade
 
-                if best_pairing is None:
+                # If no acceptable pair improved the grade, pair only with other poor grades
+                if best_pairing is None:  # No acceptable grade found
                     for _, other_row in filtered_data.iterrows():
                         other_cell_id = other_row['CELL']
                         si_b = other_row['Si']
                         fe_b = other_row['Fe']
                         other_grade = other_row['Grade']
                         
+                        # Only pair with other poor grades and not already used
                         if other_grade in ['1535', '2050'] and other_cell_id != cell_id and other_cell_id not in used_cells:
                             avg_si = (si_a + si_b) / 2
                             avg_fe = (fe_a + fe_b) / 2
                             combined_grade = assign_grade(avg_si, avg_fe)
 
+                            # Only track if it remains a poor grade
                             if combined_grade in ['1535', '2050']:
                                 distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
                                 if distance < best_distance:
@@ -108,38 +121,89 @@ if uploaded_file is not None:
                                     best_pairing = other_cell_id
                                     best_combined_grade = combined_grade
 
+                # Append the closest improving cell if found
                 if best_pairing is not None:
-                    suggested_schedule.append({
-                        "Base_Cell": cell_id,
-                        "Paired_Cell": best_pairing,
+                    closest_improving_data.append({
+                        "Poor_Cell": cell_id,
+                        "Improving_Cell": best_pairing,
                         "Resultant_Grade": best_combined_grade
                     })
+                    # Mark both cells as used
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Pair acceptable grades (0506, 0610, 1020) with each other
+        # Second pass: Focus on pairable grades: 0303, 0404, 0406
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
             individual_grade = row['Grade']
 
-            if individual_grade in ['0506', '0610', '1020'] and cell_id not in used_cells:
+            # Focus on pairable grades: 0303, 0404, 0406
+            if individual_grade in ['0303', '0404', '0406'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
-                best_distance = float('inf')
+                best_distance = float('inf')  # Start with infinity
                 
+                # Create combinations among themselves
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
+                    # Only consider pairing within 0303, 0404, 0406 and not already used
+                    if other_grade in ['0303', '0404', '0406'] and other_cell_id != cell_id and other_cell_id not in used_cells:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+
+                        # Update if this combination improves the grade
+                        if combined_grade in ['0404', '0406', '0303']:
+                            distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_pairing = other_cell_id
+                                best_combined_grade = combined_grade
+
+                # Append the closest pairing found if applicable
+                if best_pairing is not None:
+                    pairable_grades_data.append({
+                        "Base_Cell": cell_id,
+                        "Pairable_Cell": best_pairing,
+                        "Resultant_Grade": best_combined_grade
+                    })
+                    # Mark both cells as used
+                    used_cells.add(cell_id)
+                    used_cells.add(best_pairing)
+
+        # Third pass: Focus on acceptable grades: 0506, 0610, 1020
+        for index, row in filtered_data.iterrows():
+            cell_id = row['CELL']
+            si_a = row['Si']
+            fe_a = row['Fe']
+            individual_grade = row['Grade']
+
+            # Focus on acceptable grades
+            if individual_grade in ['0506', '0610', '1020'] and cell_id not in used_cells:
+                best_pairing = None
+                best_combined_grade = None
+                best_distance = float('inf')  # Start with infinity
+                
+                # Create combinations with other acceptable grades
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
+
+                    # Only consider pairing within acceptable grades and not already used
                     if other_grade in ['0506', '0610', '1020'] and other_cell_id != cell_id and other_cell_id not in used_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
 
+                        # Track if it improves the grade
                         if combined_grade not in ['1535', '2050']:
                             distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
                             if distance < best_distance:
@@ -147,44 +211,80 @@ if uploaded_file is not None:
                                 best_pairing = other_cell_id
                                 best_combined_grade = combined_grade
 
+                # Append if a pairing was found
                 if best_pairing is not None:
-                    suggested_schedule.append({
-                        "Base_Cell": cell_id,
-                        "Paired_Cell": best_pairing,
+                    acceptable_pairings_data.append({
+                        "Acceptable_Cell": cell_id,
+                        "Pairing_Cell": best_pairing,
                         "Resultant_Grade": best_combined_grade
                     })
+                    # Mark both cells as used
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Handle any remaining cells as "Standalone Cells"
+        # Pair remaining unpaired acceptable and non-improved grades
+        unpaired_acceptables = [cell for cell in filtered_data['CELL'] if cell not in used_cells and filtered_data.loc[filtered_data['CELL'] == cell, 'Grade'].values[0] in ['0506', '0610', '1020']]
+        unpaired_non_improved = [cell for cell in filtered_data['CELL'] if cell not in used_cells and filtered_data.loc[filtered_data['CELL'] == cell, 'Grade'].values[0] in ['0303', '0404', '0406']]
+
+        for accept_cell in unpaired_acceptables:
+            for non_improve_cell in unpaired_non_improved:
+                si_accept = filtered_data.loc[filtered_data['CELL'] == accept_cell, 'Si'].values[0]
+                fe_accept = filtered_data.loc[filtered_data['CELL'] == accept_cell, 'Fe'].values[0]
+                si_non_improve = filtered_data.loc[filtered_data['CELL'] == non_improve_cell, 'Si'].values[0]
+                fe_non_improve = filtered_data.loc[filtered_data['CELL'] == non_improve_cell, 'Fe'].values[0]
+
+                avg_si = (si_accept + si_non_improve) / 2
+                avg_fe = (fe_accept + fe_non_improve) / 2
+                resultant_grade = assign_grade(avg_si, avg_fe)
+
+                additional_pairings.append({
+                    "Acceptable_Cell": accept_cell,
+                    "Non_Improving_Cell": non_improve_cell,
+                    "Resultant_Grade": resultant_grade
+                })
+                # Mark both as used
+                used_cells.add(accept_cell)
+                used_cells.add(non_improve_cell)
+                break  # Exit after pairing one of each type
+
+        # List any remaining unpaired cells
         for _, row in filtered_data.iterrows():
             cell_id = row['CELL']
             if cell_id not in used_cells:
-                standalone_cells.append({
-                    "Standalone_Cell": cell_id,
+                remaining_cells.append({
+                    "Remaining_Cell": cell_id,
                     "Individual_Grade": row['Grade']
                 })
 
-        # Display the single consolidated table with paired results
-        st.subheader("Suggested Tapping Schedule")
-        st.dataframe(pd.DataFrame(suggested_schedule))
+        # Display the results
+        st.subheader("Pairs for Poor Grades Bettered:")
+        st.dataframe(pd.DataFrame(closest_improving_data))
 
-        # Display standalone cells table only if any unpaired cells remain
-        if standalone_cells:
-            st.subheader("Standalone Cells:")
-            st.dataframe(pd.DataFrame(standalone_cells))
+        st.subheader("Pairs for Non-Improved Grades:")
+        st.dataframe(pd.DataFrame(pairable_grades_data))
 
-        # Save all results to Excel
+        st.subheader("Pairs for Acceptable Grades:")
+        st.dataframe(pd.DataFrame(acceptable_pairings_data))
+
+        st.subheader("Pairs for Acceptable and Non-Improved Grades:")
+        st.dataframe(pd.DataFrame(additional_pairings))
+
+        st.subheader("Remaining Cells without Pairs:")
+        st.dataframe(pd.DataFrame(remaining_cells))
+
+                # Optionally, save results to an Excel file
         output_data = {
-            "Suggested Tapping Schedule": suggested_schedule,
-            "Standalone Cells": standalone_cells if standalone_cells else None
+            "Poor Grades Bettered": closest_improving_data,  # Shortened
+            "Non-Improved Grades": pairable_grades_data,      # Shortened
+            "Acceptable Grades": acceptable_pairings_data,     # Shortened
+            "Acceptable & Non-Improved": additional_pairings,  # Shortened
+            "Remaining Cells": remaining_cells                 # Shortened
         }
         
         output_file = BytesIO()
         with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-            pd.DataFrame(suggested_schedule).to_excel(writer, sheet_name="Suggested Tapping Schedule", index=False)
-            if standalone_cells:
-                pd.DataFrame(standalone_cells).to_excel(writer, sheet_name="Standalone Cells", index=False)
+            for sheet_name, data in output_data.items():
+                pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
         
         output_file.seek(0)
         
@@ -197,3 +297,5 @@ if uploaded_file is not None:
 
     else:
         st.error("Uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
+
+
