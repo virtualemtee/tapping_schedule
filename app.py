@@ -58,9 +58,10 @@ if uploaded_file is not None:
         st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
 
         # Prepare to compute averages for combinations
-        combination_data = []
-        closest_improving_data = []
+        pairing_results = []
+        paired_cells = set()  # Track paired cells to avoid reuse
 
+        # First, handle poor grades
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -68,74 +69,127 @@ if uploaded_file is not None:
             individual_grade = row['Grade']
 
             # Focus only on poor grades
-            if individual_grade in ['1535', '2050']:
+            if individual_grade in ['1535', '2050'] and cell_id not in paired_cells:
                 best_pairing = None
                 best_combined_grade = None
-                best_distance = float('inf')  # Start with infinity
-                
-                # Create combinations with acceptable grades
+
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
-                    # Check if the other cell is an acceptable grade
-                    if other_grade in ['0506', '0610', '1020']:
+                    # Only pair with acceptable grades
+                    if other_grade in ['0506', '0610', '1020'] and other_cell_id not in paired_cells:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
 
-                        # Update if this combination improves the grade
+                        # Track the pairing result
                         if combined_grade not in ['1535', '2050']:
-                            distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
-                            if distance < best_distance:
-                                best_distance = distance
-                                best_pairing = other_cell_id
-                                best_combined_grade = combined_grade
+                            pairing_results.append({
+                                "Cell_1": cell_id,
+                                "Cell_2": other_cell_id,
+                                "Resultant_Grade": combined_grade
+                            })
+                            # Mark both cells as paired
+                            paired_cells.add(cell_id)
+                            paired_cells.add(other_cell_id)
 
                 # If no acceptable pair improved the grade, pair only with other poor grades
-                if best_pairing is None:  # No acceptable grade found
+                if not any(pair["Cell_2"] == cell_id for pair in pairing_results):
                     for _, other_row in filtered_data.iterrows():
                         other_cell_id = other_row['CELL']
                         si_b = other_row['Si']
                         fe_b = other_row['Fe']
                         other_grade = other_row['Grade']
-                        
+
                         # Only pair with other poor grades
-                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id:
+                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id and other_cell_id not in paired_cells:
                             avg_si = (si_a + si_b) / 2
                             avg_fe = (fe_a + fe_b) / 2
                             combined_grade = assign_grade(avg_si, avg_fe)
 
                             # Only track if it remains a poor grade
                             if combined_grade in ['1535', '2050']:
-                                distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
-                                if distance < best_distance:
-                                    best_distance = distance
-                                    best_pairing = other_cell_id
-                                    best_combined_grade = combined_grade
+                                pairing_results.append({
+                                    "Cell_1": cell_id,
+                                    "Cell_2": other_cell_id,
+                                    "Resultant_Grade": combined_grade
+                                })
+                                # Mark both cells as paired
+                                paired_cells.add(cell_id)
+                                paired_cells.add(other_cell_id)
 
-                # Append the closest improving cell if found
-                if best_pairing is not None:
-                    closest_improving_data.append({
-                        "Poor_Cell": cell_id,
-                        "Improving_Cell": best_pairing,
-                        "Resultant_Grade": best_combined_grade
-                    })
+        # Handle non-improving grades (0303, 0404, 0406)
+        for index, row in filtered_data.iterrows():
+            cell_id = row['CELL']
+            si_a = row['Si']
+            fe_a = row['Fe']
+            individual_grade = row['Grade']
 
-        # Create a DataFrame for closest improving results
-        closest_improving_df = pd.DataFrame(closest_improving_data)
+            if individual_grade in ['0303', '0404', '0406'] and cell_id not in paired_cells:
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
 
-        # Display closest improving results
-        st.write("Closest Cells that Improve Poor Grades:")
-        st.dataframe(closest_improving_df)
+                    # Only pair with acceptable grades
+                    if other_grade in ['0506', '0610', '1020'] and other_cell_id not in paired_cells:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+
+                        pairing_results.append({
+                            "Cell_1": cell_id,
+                            "Cell_2": other_cell_id,
+                            "Resultant_Grade": combined_grade
+                        })
+                        # Mark both cells as paired
+                        paired_cells.add(cell_id)
+                        paired_cells.add(other_cell_id)
+
+        # Handle acceptable grades (0506, 0610, 1020)
+        for index, row in filtered_data.iterrows():
+            cell_id = row['CELL']
+            si_a = row['Si']
+            fe_a = row['Fe']
+            individual_grade = row['Grade']
+
+            if individual_grade in ['0506', '0610', '1020'] and cell_id not in paired_cells:
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
+
+                    if other_cell_id != cell_id and other_cell_id not in paired_cells:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+
+                        pairing_results.append({
+                            "Cell_1": cell_id,
+                            "Cell_2": other_cell_id,
+                            "Resultant_Grade": combined_grade
+                        })
+                        # Mark both cells as paired
+                        paired_cells.add(cell_id)
+                        paired_cells.add(other_cell_id)
+
+        # Create a DataFrame for all pairing results
+        pairing_df = pd.DataFrame(pairing_results)
+
+        # Display pairing results
+        st.write("Unique Cell Pairings and Resultant Grades:")
+        st.dataframe(pairing_df)
 
         # Save results to an Excel file in memory
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
-            closest_improving_df.to_excel(writer, index=False, sheet_name='Closest Improving Results')
+            pairing_df.to_excel(writer, index=False, sheet_name='Cell Pairings Results')
         output.seek(0)
 
         # Add download button
