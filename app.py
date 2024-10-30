@@ -29,7 +29,7 @@ def assign_grade(si, fe):
     return None
 
 # Streamlit app layout
-st.title("Material Grading Application")
+st.title("Tapping Schedule")
 st.write("Upload an Excel file containing the Si and Fe values.")
 
 # Upload the Excel file
