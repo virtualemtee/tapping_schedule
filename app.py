@@ -62,7 +62,7 @@ if uploaded_file is not None:
         pairable_grades_data = []
         acceptable_pairings_data = []
         remaining_cells = []
-        
+        additional_pairings = []  # To store additional pairings between acceptable and non-improved
         used_cells = set()  # Set to track used cells
 
         # First pass: Focus on poor grades
@@ -222,6 +222,31 @@ if uploaded_file is not None:
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
+        # Pair remaining unpaired acceptable and non-improved grades
+        unpaired_acceptables = [cell for cell in filtered_data['CELL'] if cell not in used_cells and filtered_data.loc[filtered_data['CELL'] == cell, 'Grade'].values[0] in ['0506', '0610', '1020']]
+        unpaired_non_improved = [cell for cell in filtered_data['CELL'] if cell not in used_cells and filtered_data.loc[filtered_data['CELL'] == cell, 'Grade'].values[0] in ['0303', '0404', '0406']]
+
+        for accept_cell in unpaired_acceptables:
+            for non_improve_cell in unpaired_non_improved:
+                si_accept = filtered_data.loc[filtered_data['CELL'] == accept_cell, 'Si'].values[0]
+                fe_accept = filtered_data.loc[filtered_data['CELL'] == accept_cell, 'Fe'].values[0]
+                si_non_improve = filtered_data.loc[filtered_data['CELL'] == non_improve_cell, 'Si'].values[0]
+                fe_non_improve = filtered_data.loc[filtered_data['CELL'] == non_improve_cell, 'Fe'].values[0]
+
+                avg_si = (si_accept + si_non_improve) / 2
+                avg_fe = (fe_accept + fe_non_improve) / 2
+                resultant_grade = assign_grade(avg_si, avg_fe)
+
+                additional_pairings.append({
+                    "Acceptable_Cell": accept_cell,
+                    "Non_Improving_Cell": non_improve_cell,
+                    "Resultant_Grade": resultant_grade
+                })
+                # Mark both as used
+                used_cells.add(accept_cell)
+                used_cells.add(non_improve_cell)
+                break  # Exit after pairing one of each type
+
         # List any remaining unpaired cells
         for _, row in filtered_data.iterrows():
             cell_id = row['CELL']
@@ -241,6 +266,9 @@ if uploaded_file is not None:
         st.subheader("Pairs for Acceptable Grades:")
         st.dataframe(pd.DataFrame(acceptable_pairings_data))
 
+        st.subheader("Pairs for Acceptable and Non-Improved Grades:")
+        st.dataframe(pd.DataFrame(additional_pairings))
+
         st.subheader("Remaining Cells without Pairs:")
         st.dataframe(pd.DataFrame(remaining_cells))
 
@@ -249,6 +277,7 @@ if uploaded_file is not None:
             "Pairs for Poor Grades Bettered": closest_improving_data,
             "Pairs for Non-Improved Grades": pairable_grades_data,
             "Pairs for Acceptable Grades": acceptable_pairings_data,
+            "Pairs for Acceptable and Non-Improved Grades": additional_pairings,
             "Remaining Cells without Pairs": remaining_cells
         }
 
