@@ -59,6 +59,8 @@ if uploaded_file is not None:
 
         # Prepare to compute averages for combinations
         combination_data = []
+        closest_improving_data = []
+
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -67,8 +69,10 @@ if uploaded_file is not None:
 
             # Focus only on poor grades
             if individual_grade in ['1535', '2050']:
-                improved = False
-
+                best_pairing = None
+                best_combined_grade = None
+                best_distance = float('inf')  # Start with infinity
+                
                 # Create combinations with acceptable grades
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
@@ -81,18 +85,17 @@ if uploaded_file is not None:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
                         combined_grade = assign_grade(avg_si, avg_fe)
+
+                        # Update if this combination improves the grade
                         if combined_grade not in ['1535', '2050']:
-                            combination_data.append({
-                                "Cell_A": cell_id,
-                                "Cell_B": other_cell_id,
-                                "Avg_Si": avg_si,
-                                "Avg_Fe": avg_fe,
-                                "Combined_Grade": combined_grade
-                            })
-                            improved = True  # Found an improving pair
+                            distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_pairing = other_cell_id
+                                best_combined_grade = combined_grade
 
                 # If no acceptable pair improved the grade, pair only with other poor grades
-                if not improved:
+                if best_pairing is None:  # No acceptable grade found
                     for _, other_row in filtered_data.iterrows():
                         other_cell_id = other_row['CELL']
                         si_b = other_row['Si']
@@ -104,26 +107,35 @@ if uploaded_file is not None:
                             avg_si = (si_a + si_b) / 2
                             avg_fe = (fe_a + fe_b) / 2
                             combined_grade = assign_grade(avg_si, avg_fe)
-                            combination_data.append({
-                                "Cell_A": cell_id,
-                                "Cell_B": other_cell_id,
-                                "Avg_Si": avg_si,
-                                "Avg_Fe": avg_fe,
-                                "Combined_Grade": combined_grade
-                            })
 
-        # Create a DataFrame for combination results
-        combinations_df = pd.DataFrame(combination_data)
+                            # Only track if it remains a poor grade
+                            if combined_grade in ['1535', '2050']:
+                                distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                                if distance < best_distance:
+                                    best_distance = distance
+                                    best_pairing = other_cell_id
+                                    best_combined_grade = combined_grade
 
-        # Display combination results
-        st.write("Grading Results for Combinations:")
-        st.dataframe(combinations_df)
+                # Append the closest improving cell if found
+                if best_pairing is not None:
+                    closest_improving_data.append({
+                        "Poor_Cell": cell_id,
+                        "Improving_Cell": best_pairing,
+                        "Resultant_Grade": best_combined_grade
+                    })
+
+        # Create a DataFrame for closest improving results
+        closest_improving_df = pd.DataFrame(closest_improving_data)
+
+        # Display closest improving results
+        st.write("Closest Cells that Improve Poor Grades:")
+        st.dataframe(closest_improving_df)
 
         # Save results to an Excel file in memory
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
-            combinations_df.to_excel(writer, index=False, sheet_name='Combination Grading Results')
+            closest_improving_df.to_excel(writer, index=False, sheet_name='Closest Improving Results')
         output.seek(0)
 
         # Add download button
