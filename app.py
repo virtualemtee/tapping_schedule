@@ -279,7 +279,7 @@ if uploaded_file is not None:
         # Append paired cells for each category with necessary details
         for pairing in closest_improving_data:
             summary_data.append({
-                "Type": "Poor Grades Bettered",
+              #  "Type": "Poor Grades Bettered",
                 "Main_Cell": pairing["Poor_Cell"],
                 "Paired_Cell": pairing["Improving_Cell"],
                 "Resultant_Grade": pairing["Resultant_Grade"]
@@ -287,7 +287,7 @@ if uploaded_file is not None:
         
         for pairing in pairable_grades_data:
             summary_data.append({
-                "Type": "Non-Improved Grades",
+              #  "Type": "Non-Improved Grades",
                 "Main_Cell": pairing["Base_Cell"],
                 "Paired_Cell": pairing["Pairable_Cell"],
                 "Resultant_Grade": pairing["Resultant_Grade"]
@@ -295,7 +295,7 @@ if uploaded_file is not None:
         
         for pairing in acceptable_pairings_data:
             summary_data.append({
-                "Type": "Acceptable Grades",
+           #     "Type": "Acceptable Grades",
                 "Main_Cell": pairing["Acceptable_Cell"],
                 "Paired_Cell": pairing["Pairing_Cell"],
                 "Resultant_Grade": pairing["Resultant_Grade"]
@@ -303,7 +303,7 @@ if uploaded_file is not None:
         
         for pairing in additional_pairings:
             summary_data.append({
-                "Type": "Acceptable & Non-Improved",
+           #     "Type": "Acceptable & Non-Improved",
                 "Main_Cell": pairing["Acceptable_Cell"],
                 "Paired_Cell": pairing["Non_Improving_Cell"],
                 "Resultant_Grade": pairing["Resultant_Grade"]
@@ -312,7 +312,7 @@ if uploaded_file is not None:
         # Append unpaired cells to the summary as well
         for cell in remaining_cells:
             summary_data.append({
-                "Type": "Remaining Cells",
+          #      "Type": "Remaining Cells",
                 "Main_Cell": cell["Remaining_Cell"],
                 "Paired_Cell": None,
                 "Resultant_Grade": cell["Individual_Grade"]
