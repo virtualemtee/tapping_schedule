@@ -53,10 +53,6 @@ if uploaded_file is not None:
         # Apply grading function to each row of filtered data
         filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
 
-        # Display results for individual cells
-        st.write("Grading Results for Individual Cells:")
-        st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
-
         # Prepare lists to store pairings and unpaired cells
         all_pairings_data = []
         used_cells = set()
@@ -102,18 +98,18 @@ if uploaded_file is not None:
             # If pairing is found, store it and mark cells as used
             if best_pairing:
                 all_pairings_data.append({
-                    "Base_Cell": cell_id,
-                    "Pair_Cell": best_pairing,
-                    "Resultant_Grade": best_combined_grade
+                    "Cells": cell_id,
+                    "Cell Pair": best_pairing,
+                    "Grade": best_combined_grade
                 })
                 used_cells.add(cell_id)
                 used_cells.add(best_pairing)
             else:
                 # If no pairing, record the cell with its own grade
                 all_pairings_data.append({
-                    "Base_Cell": cell_id,
-                    "Pair_Cell": None,
-                    "Resultant_Grade": individual_grade
+                    "Cells": cell_id,
+                    "Cell Pair": None,
+                    "Grade": individual_grade
                 })
                 used_cells.add(cell_id)
 
@@ -121,13 +117,23 @@ if uploaded_file is not None:
         st.subheader("All Pairings Including Unpaired Cells:")
         st.dataframe(pd.DataFrame(all_pairings_data))
 
-        # Optionally, save results to an Excel file
+        # Save results to an Excel file with a single sheet
         output_file = BytesIO()
         with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-            pd.DataFrame(all_pairings_data).to_excel(writer, sheet_name='All Pairings', index=False)
-        
+            df_output = pd.DataFrame(all_pairings_data)
+            df_output.to_excel(writer, sheet_name='Summary', index=False)
+
+            # Group the columns as required
+            workbook = writer.book
+            worksheet = writer.sheets['Summary']
+            cell_format = workbook.add_format({'bold': True, 'align': 'center'})
+            worksheet.merge_range('A1:A2', 'Cells', cell_format)
+            worksheet.merge_range('B1:B2', 'Cell Pair', cell_format)
+            worksheet.merge_range('C1:C2', 'Grade', cell_format)
+
         output_file.seek(0)
         
+        # Streamlit download button
         st.download_button(
             label="Download Grading Results",
             data=output_file,
