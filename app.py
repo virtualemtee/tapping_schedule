@@ -28,10 +28,6 @@ def assign_grade(si, fe):
         return '2050'
     return None
 
-# Define acceptable and poor grades
-poor_grades = ['1535', '2050']
-acceptable_grades = ['0506', '0610', '1020']
-
 # Streamlit app layout
 st.title("Material Grading Application")
 st.write("Upload an Excel file containing the Si and Fe values.")
@@ -67,62 +63,60 @@ if uploaded_file is not None:
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
-            grade_a = row['Grade']
+            individual_grade = row['Grade']
 
-            # Check if the current cell has a poor grade
-            if grade_a in poor_grades:
-                # Pair only with acceptable grades or other poor grades
+            # Focus only on poor grades
+            if individual_grade in ['1535', '2050']:
+                improved = False
+
+                # Create combinations with acceptable grades
                 for _, other_row in filtered_data.iterrows():
-                    if other_row['CELL'] == cell_id:
-                        continue  # Skip pairing with itself
+                    other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
                     fe_b = other_row['Fe']
-                    grade_b = other_row['Grade']
+                    other_grade = other_row['Grade']
 
-                    # Calculate average Si and Fe
-                    avg_si = (si_a + si_b) / 2
-                    avg_fe = (fe_a + fe_b) / 2
-                    combined_grade = assign_grade(avg_si, avg_fe)
+                    # Check if the other cell is an acceptable grade
+                    if other_grade in ['0506', '0610', '1020']:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+                        if combined_grade not in ['1535', '2050']:
+                            combination_data.append({
+                                "Cell_A": cell_id,
+                                "Cell_B": other_cell_id,
+                                "Avg_Si": avg_si,
+                                "Avg_Fe": avg_fe,
+                                "Combined_Grade": combined_grade
+                            })
+                            improved = True  # Found an improving pair
 
-                    # Logic to determine if we can use this pair
-                    if grade_a == '2050':
-                        # For 2050, allow pairing with acceptable grades leading to 1535 or 1020
-                        if grade_b in acceptable_grades and combined_grade in ['1535', '1020']:
+                # If no acceptable pair improved the grade, pair only with other poor grades
+                if not improved:
+                    for _, other_row in filtered_data.iterrows():
+                        other_cell_id = other_row['CELL']
+                        si_b = other_row['Si']
+                        fe_b = other_row['Fe']
+                        other_grade = other_row['Grade']
+                        
+                        # Only pair with other poor grades
+                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id:
+                            avg_si = (si_a + si_b) / 2
+                            avg_fe = (fe_a + fe_b) / 2
+                            combined_grade = assign_grade(avg_si, avg_fe)
                             combination_data.append({
                                 "Cell_A": cell_id,
-                                "Cell_B": other_row['CELL'],
+                                "Cell_B": other_cell_id,
                                 "Avg_Si": avg_si,
                                 "Avg_Fe": avg_fe,
                                 "Combined_Grade": combined_grade
                             })
-                    else:
-                        # For 1535, only allow pairing with acceptable grades
-                        if grade_b in acceptable_grades:
-                            combination_data.append({
-                                "Cell_A": cell_id,
-                                "Cell_B": other_row['CELL'],
-                                "Avg_Si": avg_si,
-                                "Avg_Fe": avg_fe,
-                                "Combined_Grade": combined_grade
-                            })
-                        elif grade_b in poor_grades and combined_grade in poor_grades:
-                            # Allow pairing with another poor grade if no improvement
-                            combination_data.append({
-                                "Cell_A": cell_id,
-                                "Cell_B": other_row['CELL'],
-                                "Avg_Si": avg_si,
-                                "Avg_Fe": avg_fe,
-                                "Combined_Grade": combined_grade
-                            })
-            else:
-                # If the cell's grade is not poor, skip pairing
-                continue
 
         # Create a DataFrame for combination results
         combinations_df = pd.DataFrame(combination_data)
 
         # Display combination results
-        st.write("Grading Results for Combinations (Improved Pairing):")
+        st.write("Grading Results for Combinations:")
         st.dataframe(combinations_df)
 
         # Save results to an Excel file in memory
