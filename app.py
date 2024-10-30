@@ -3,7 +3,6 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from io import BytesIO
-from itertools import combinations
 
 # Load the trained model and label encoder
 model = joblib.load('paired_model.pkl')
@@ -64,20 +63,54 @@ if uploaded_file is not None:
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
-            # Create combinations with all other cells
-            for _, other_row in filtered_data[filtered_data['CELL'] != cell_id].iterrows():
-                si_b = other_row['Si']
-                fe_b = other_row['Fe']
-                avg_si = (si_a + si_b) / 2
-                avg_fe = (fe_a + fe_b) / 2
-                combined_grade = assign_grade(avg_si, avg_fe)
-                combination_data.append({
-                    "Cell_A": cell_id,
-                    "Cell_B": other_row['CELL'],
-                    "Avg_Si": avg_si,
-                    "Avg_Fe": avg_fe,
-                    "Combined_Grade": combined_grade
-                })
+            individual_grade = row['Grade']
+
+            # Focus only on poor grades
+            if individual_grade in ['1535', '2050']:
+                improved = False
+
+                # Create combinations with acceptable grades
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
+
+                    # Check if the other cell is an acceptable grade
+                    if other_grade in ['0506', '0610', '1020']:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+                        if combined_grade not in ['1535', '2050']:
+                            combination_data.append({
+                                "Cell_A": cell_id,
+                                "Cell_B": other_cell_id,
+                                "Avg_Si": avg_si,
+                                "Avg_Fe": avg_fe,
+                                "Combined_Grade": combined_grade
+                            })
+                            improved = True  # Found an improving pair
+
+                # If no acceptable pair improved the grade, pair only with other poor grades
+                if not improved:
+                    for _, other_row in filtered_data.iterrows():
+                        other_cell_id = other_row['CELL']
+                        si_b = other_row['Si']
+                        fe_b = other_row['Fe']
+                        other_grade = other_row['Grade']
+                        
+                        # Only pair with other poor grades
+                        if other_grade in ['1535', '2050'] and other_cell_id != cell_id:
+                            avg_si = (si_a + si_b) / 2
+                            avg_fe = (fe_a + fe_b) / 2
+                            combined_grade = assign_grade(avg_si, avg_fe)
+                            combination_data.append({
+                                "Cell_A": cell_id,
+                                "Cell_B": other_cell_id,
+                                "Avg_Si": avg_si,
+                                "Avg_Fe": avg_fe,
+                                "Combined_Grade": combined_grade
+                            })
 
         # Create a DataFrame for combination results
         combinations_df = pd.DataFrame(combination_data)
