@@ -54,8 +54,18 @@ if uploaded_file:
                 avg_si = (si1 + si2) / 2
                 avg_fe = (fe1 + fe2) / 2
                 
+                # Prepare the input DataFrame with feature names for the model
+                input_data = pd.DataFrame({
+                    "Pot1_Si": [si1], 
+                    "Pot1_Fe": [fe1], 
+                    "Pot2_Si": [si2], 
+                    "Pot2_Fe": [fe2], 
+                    "Avg_Si": [avg_si], 
+                    "Avg_Fe": [avg_fe]
+                })
+                
                 # Predict grade for this pairing
-                pred = model.predict([[si1, fe1, si2, fe2, avg_si, avg_fe]])
+                pred = model.predict(input_data)
                 grade = label_encoder.inverse_transform(pred)[0]
 
                 # If the grade matches the target and neither cell is used, add it to best pairs
