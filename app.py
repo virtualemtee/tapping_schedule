@@ -50,8 +50,8 @@ if uploaded_file is not None:
         data['Fe'] = data['Fe'].fillna(0)
         filtered_data = data[(data['Si'] > 0) & (data['Fe'] > 0)]
 
-        # Apply grading function to each row of filtered data using .loc
-        filtered_data.loc[:, 'Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
+        # Apply grading function to each row of filtered data
+        filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
 
         # Display results for individual cells
         st.write("Grading Results for Individual Cells:")
@@ -68,6 +68,8 @@ if uploaded_file is not None:
             # Focus only on poor grades
             if individual_grade in ['1535', '2050']:
                 improved = False
+                best_improvement = None
+                best_cell = None
 
                 # Create combinations with acceptable grades
                 for _, other_row in filtered_data.iterrows():
@@ -76,7 +78,20 @@ if uploaded_file is not None:
                     fe_b = other_row['Fe']
                     other_grade = other_row['Grade']
 
-                    # Check if the other cell is an acceptable grade
+                    # Check improvement conditions for 2050
+                    if individual_grade == '2050':
+                        if other_grade == '1535':
+                            avg_si = (si_a + si_b) / 2
+                            avg_fe = (fe_a + fe_b) / 2
+                            combined_grade = assign_grade(avg_si, avg_fe)
+                            if combined_grade == '1535':
+                                # Accept the improvement
+                                if best_improvement is None or abs(int(cell_id) - int(other_cell_id)) < abs(int(cell_id) - int(best_cell)):
+                                    best_improvement = combined_grade
+                                    best_cell = other_cell_id
+                            continue  # Skip other pairings for 2050
+
+                    # General improvement for poor grades
                     if other_grade in ['0506', '0610', '1020']:
                         avg_si = (si_a + si_b) / 2
                         avg_fe = (fe_a + fe_b) / 2
@@ -92,7 +107,7 @@ if uploaded_file is not None:
                             improved = True  # Found an improving pair
 
                 # If no acceptable pair improved the grade, pair only with other poor grades
-                if not improved:
+                if not improved and individual_grade == '2050':
                     for _, other_row in filtered_data.iterrows():
                         other_cell_id = other_row['CELL']
                         si_b = other_row['Si']
@@ -111,6 +126,16 @@ if uploaded_file is not None:
                                 "Avg_Fe": avg_fe,
                                 "Combined_Grade": combined_grade
                             })
+
+                # Record the best improvement found
+                if best_cell is not None and best_improvement is not None:
+                    combination_data.append({
+                        "Cell_A": cell_id,
+                        "Cell_B": best_cell,
+                        "Avg_Si": (si_a + filtered_data.loc[filtered_data['CELL'] == best_cell, 'Si'].values[0]) / 2,
+                        "Avg_Fe": (fe_a + filtered_data.loc[filtered_data['CELL'] == best_cell, 'Fe'].values[0]) / 2,
+                        "Combined_Grade": best_improvement
+                    })
 
         # Create a DataFrame for combination results
         combinations_df = pd.DataFrame(combination_data)
