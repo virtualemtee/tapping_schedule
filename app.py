@@ -272,28 +272,28 @@ if uploaded_file is not None:
         st.subheader("Remaining Cells without Pairs:")
         st.dataframe(pd.DataFrame(remaining_cells))
 
-       # Optionally, save results to an Excel file
-output_data = {
-    "Poor Grades Bettered": closest_improving_data,  # Shortened
-    "Non-Improved Grades": pairable_grades_data,      # Shortened
-    "Acceptable Grades": acceptable_pairings_data,     # Shortened
-    "Acceptable & Non-Improved": additional_pairings,  # Shortened
-    "Remaining Cells": remaining_cells                 # Shortened
-}
-
-output_file = BytesIO()
-with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-    for sheet_name, data in output_data.items():
-        pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
-
-output_file.seek(0)
-
-st.download_button(
-    label="Download Grading Results",
-    data=output_file,
-    file_name='grading_results.xlsx',
-    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-)
+                # Optionally, save results to an Excel file
+        output_data = {
+            "Poor Grades Bettered": closest_improving_data,  # Shortened
+            "Non-Improved Grades": pairable_grades_data,      # Shortened
+            "Acceptable Grades": acceptable_pairings_data,     # Shortened
+            "Acceptable & Non-Improved": additional_pairings,  # Shortened
+            "Remaining Cells": remaining_cells                 # Shortened
+        }
+        
+        output_file = BytesIO()
+        with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+            for sheet_name, data in output_data.items():
+                pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
+        
+        output_file.seek(0)
+        
+        st.download_button(
+            label="Download Grading Results",
+            data=output_file,
+            file_name='grading_results.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
 
     else:
         st.error("Uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
