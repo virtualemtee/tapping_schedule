@@ -58,8 +58,8 @@ if uploaded_file is not None:
         st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
 
         # Prepare to compute averages for combinations
-        combination_data = []
         closest_improving_data = []
+        pairable_grades_data = []
 
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
@@ -124,18 +124,59 @@ if uploaded_file is not None:
                         "Resultant_Grade": best_combined_grade
                     })
 
-        # Create a DataFrame for closest improving results
+            # Focus on pairable grades: 0303, 0404, 0406
+            if individual_grade in ['0303', '0404', '0406']:
+                best_pairing = None
+                best_combined_grade = None
+                best_distance = float('inf')  # Start with infinity
+                
+                # Create combinations among themselves
+                for _, other_row in filtered_data.iterrows():
+                    other_cell_id = other_row['CELL']
+                    si_b = other_row['Si']
+                    fe_b = other_row['Fe']
+                    other_grade = other_row['Grade']
+
+                    # Only consider pairing within 0303, 0404, 0406
+                    if other_grade in ['0303', '0404', '0406'] and other_cell_id != cell_id:
+                        avg_si = (si_a + si_b) / 2
+                        avg_fe = (fe_a + fe_b) / 2
+                        combined_grade = assign_grade(avg_si, avg_fe)
+
+                        # Update if this combination improves the grade
+                        if combined_grade in ['0404', '0406', '0303']:
+                            distance = abs(index - filtered_data[filtered_data['CELL'] == other_cell_id].index[0])
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_pairing = other_cell_id
+                                best_combined_grade = combined_grade
+
+                # Append the closest pairing found if applicable
+                if best_pairing is not None:
+                    pairable_grades_data.append({
+                        "Base_Cell": cell_id,
+                        "Pairable_Cell": best_pairing,
+                        "Resultant_Grade": best_combined_grade
+                    })
+
+        # Create DataFrames for results
         closest_improving_df = pd.DataFrame(closest_improving_data)
+        pairable_grades_df = pd.DataFrame(pairable_grades_data)
 
         # Display closest improving results
         st.write("Closest Cells that Improve Poor Grades:")
         st.dataframe(closest_improving_df)
+
+        # Display pairable grades results
+        st.write("Pairable Grades among 0303, 0404, and 0406:")
+        st.dataframe(pairable_grades_df)
 
         # Save results to an Excel file in memory
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             filtered_data.to_excel(writer, index=False, sheet_name='Individual Grading Results')
             closest_improving_df.to_excel(writer, index=False, sheet_name='Closest Improving Results')
+            pairable_grades_df.to_excel(writer, index=False, sheet_name='Pairable Grades')
         output.seek(0)
 
         # Add download button
