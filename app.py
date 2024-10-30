@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 import joblib
+from io import BytesIO  # Import BytesIO
 
 # Load the trained model and label encoder
 model = joblib.load('paired_model.pkl')
@@ -55,10 +56,16 @@ if uploaded_file is not None:
         st.write("Grading Results:")
         st.dataframe(data[['CELL', 'Si', 'Fe', 'Grade']])
         
-        # Optionally, save results to an Excel file
-        output_file = st.download_button(
+        # Save results to an Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            data.to_excel(writer, index=False, sheet_name='Grading Results')
+        output.seek(0)
+
+        # Add download button
+        st.download_button(
             label="Download Grading Results",
-            data=data.to_excel(index=False),
+            data=output,
             file_name='grading_results.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
