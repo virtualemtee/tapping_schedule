@@ -334,20 +334,36 @@ if uploaded_file is not None:
             "Acceptable & Non-Improved": additional_pairings,  # Shortened
             "Remaining Cells": remaining_cells                 # Shortened
         }
-        
+
+
+            # Save only the summary data to an Excel file
         output_file = BytesIO()
         with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-            for sheet_name, data in output_data.items():
-                pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
+            summary_df.to_excel(writer, sheet_name='Overall_Summary', index=False)
         
         output_file.seek(0)
         
         st.download_button(
-            label="Download Grading Results",
+            label="Download Overall Summary",
             data=output_file,
-            file_name='grading_results.xlsx',
+            file_name='overall_summary.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
+
+        
+        # output_file = BytesIO()
+        # with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+        #     for sheet_name, data in output_data.items():
+        #         pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
+        
+        # output_file.seek(0)
+        
+        # st.download_button(
+        #     label="Download Grading Results",
+        #     data=output_file,
+        #     file_name='grading_results.xlsx',
+        #     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        # )
 
     else:
         st.error("Uploaded file must contain 'CELL', 'Si', and 'Fe' columns.")
