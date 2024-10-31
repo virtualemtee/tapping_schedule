@@ -248,7 +248,7 @@ if uploaded_file is not None:
             if cell_id not in used_cells:
                 remaining_cells.append({
                     "Standalone": cell_id,
-                    "Individual_Grade": row['Grade']
+                    "Grade": row['Grade']
                 })
 
         # Display the results
