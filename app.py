@@ -30,55 +30,50 @@ def assign_grade(si, fe):
 
 # Streamlit app layout
 st.title("Tapping Schedule")
-st.write("Upload an Excel file containing the Si and Fe values.")
-
-# Upload the Excel file
+st.write("Upload cell purity Excel file to generate the tapping schedule.")
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 
 if uploaded_file is not None:
-    # Load the data from the uploaded file
     data = pd.read_excel(uploaded_file)
 
-    # Check the data structure
+    # This part of the code helps us to see the files we have uploaded, to ensure we have uploaded the expected file.
+
     st.write("Data Preview:")
     st.dataframe(data)
-
-    # Ensure necessary columns are present
+    
     if 'CELL' in data.columns and 'Si' in data.columns and 'Fe' in data.columns:
-        # Fill missing values with zeros and filter out invalid rows
+        # Sometimes some cells can be offline and hence may not have the required Si and Fe values, insuch instance, fill empty spaces with 0
         data['Si'] = data['Si'].fillna(0)
         data['Fe'] = data['Fe'].fillna(0)
         filtered_data = data[(data['Si'] > 0) & (data['Fe'] > 0)]
 
-        # Apply grading function to each row of filtered data
+        # Per the analysis, we assign the cell purity grades here, in a table form
         filtered_data['Grade'] = filtered_data.apply(lambda row: assign_grade(row['Si'], row['Fe']), axis=1)
-
-        # Display results for individual cells
-        st.write("Grading Results for Individual Cells:")
+        st.write("Purity grading for cells based on imported analysis:")
         st.dataframe(filtered_data[['CELL', 'Si', 'Fe', 'Grade']])
 
-        # Prepare to compute averages for combinations
+        # From this point we begin our sorting and data analysis, to get the best purity (Optimization) and the closest cells (Proximity)
         closest_improving_data = []
         pairable_grades_data = []
         acceptable_pairings_data = []
         remaining_cells = []
-        additional_pairings = []  # To store additional pairings between acceptable and non-improved
-        used_cells = set()  # Set to track used cells
+        additional_pairings = []  # This list exists to store any additional pairing from 0506,0610,P1020 with 0303,0404 and 0406
+        used_cells = set()  # Set to track cells that have paired with another, to prevent a resuse of the cells in subsequent computation
 
-        # First pass: Focus on poor grades
+        # The first thing to check is cells with poor purity (1535, 2050) and let's try to better those cells.
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
             fe_a = row['Fe']
             individual_grade = row['Grade']
 
-            # Focus only on poor grades
+           
             if individual_grade in ['1535', '2050'] and cell_id not in used_cells:
                 best_pairing = None
                 best_combined_grade = None
-                best_distance = float('inf')  # Start with infinity
+                best_distance = float('inf')  # This is to get the closeness
                 
-                # Create combinations with acceptable grades
+                # Over here we are combining with purity in acceptable ranges, 0506, 0610, 1020
                 for _, other_row in filtered_data.iterrows():
                     other_cell_id = other_row['CELL']
                     si_b = other_row['Si']
@@ -99,7 +94,7 @@ if uploaded_file is not None:
                                 best_pairing = other_cell_id
                                 best_combined_grade = combined_grade
 
-                # If no acceptable pair improved the grade, pair only with other poor grades
+                # If no acceptable grade, 0506, 0610, 1020 improved the grade, pair only with other poor grades
                 if best_pairing is None:  # No acceptable grade found
                     for _, other_row in filtered_data.iterrows():
                         other_cell_id = other_row['CELL']
@@ -124,15 +119,15 @@ if uploaded_file is not None:
                 # Append the closest improving cell if found
                 if best_pairing is not None:
                     closest_improving_data.append({
-                        "Poor_Cell": cell_id,
-                        "Improving_Cell": best_pairing,
-                        "Resultant_Grade": best_combined_grade
+                        "Cell": cell_id,
+                        "Pair": best_pairing,
+                        "Grade": best_combined_grade
                     })
                     # Mark both cells as used
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Second pass: Focus on pairable grades: 0303, 0404, 0406
+        # Secondly, we focus on the auto-trims, let's handle the auto-trims to pair with auto-trims,
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -169,15 +164,15 @@ if uploaded_file is not None:
                 # Append the closest pairing found if applicable
                 if best_pairing is not None:
                     pairable_grades_data.append({
-                        "Base_Cell": cell_id,
-                        "Pairable_Cell": best_pairing,
-                        "Resultant_Grade": best_combined_grade
+                        "Cell": cell_id,
+                        "Pair": best_pairing,
+                        "Grade": best_combined_grade
                     })
                     # Mark both cells as used
                     used_cells.add(cell_id)
                     used_cells.add(best_pairing)
 
-        # Third pass: Focus on acceptable grades: 0506, 0610, 1020
+        # Then lastly we focus on P1020 and better, without the auto-trims
         for index, row in filtered_data.iterrows():
             cell_id = row['CELL']
             si_a = row['Si']
@@ -214,9 +209,9 @@ if uploaded_file is not None:
                 # Append if a pairing was found
                 if best_pairing is not None:
                     acceptable_pairings_data.append({
-                        "Acceptable_Cell": cell_id,
-                        "Pairing_Cell": best_pairing,
-                        "Resultant_Grade": best_combined_grade
+                        "Cell": cell_id,
+                        "Pair": best_pairing,
+                        "Grade": best_combined_grade
                     })
                     # Mark both cells as used
                     used_cells.add(cell_id)
@@ -238,9 +233,9 @@ if uploaded_file is not None:
                 resultant_grade = assign_grade(avg_si, avg_fe)
 
                 additional_pairings.append({
-                    "Acceptable_Cell": accept_cell,
-                    "Non_Improving_Cell": non_improve_cell,
-                    "Resultant_Grade": resultant_grade
+                    "Cell": accept_cell,
+                    "Pair": non_improve_cell,
+                    "Grade": resultant_grade
                 })
                 # Mark both as used
                 used_cells.add(accept_cell)
@@ -252,24 +247,24 @@ if uploaded_file is not None:
             cell_id = row['CELL']
             if cell_id not in used_cells:
                 remaining_cells.append({
-                    "Remaining_Cell": cell_id,
+                    "Standalone": cell_id,
                     "Individual_Grade": row['Grade']
                 })
 
         # Display the results
-        st.subheader("Pairs for Poor Grades Bettered:")
+        st.subheader("Pairing for cells with off-grade purity:")
         st.dataframe(pd.DataFrame(closest_improving_data))
 
-        st.subheader("Pairs for Non-Improved Grades:")
+        st.subheader("Pairs for 0303, 0404 and 0406 cells:")
         st.dataframe(pd.DataFrame(pairable_grades_data))
 
-        st.subheader("Pairs for Acceptable Grades:")
+        st.subheader("Pairs for 0506, 0610, P1020 cells:")
         st.dataframe(pd.DataFrame(acceptable_pairings_data))
 
-        st.subheader("Pairs for Acceptable and Non-Improved Grades:")
+        st.subheader("Pairs for an auto-trim, which optimized a P1020+ cell:")
         st.dataframe(pd.DataFrame(additional_pairings))
 
-        st.subheader("Remaining Cells without Pairs:")
+        st.subheader("Standalone cells:")
         st.dataframe(pd.DataFrame(remaining_cells))
 
 
