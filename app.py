@@ -4,11 +4,11 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from io import BytesIO
 
-# Load the trained model and label encoder
+# Trained model and label encoder
 model = joblib.load('paired_model.pkl')
 label_encoder = joblib.load('label_encoder.pkl')
 
-# Function to assign grade based on Si and Fe values
+# Cell Purity based on Si and Fe values
 def assign_grade(si, fe):
     if si <= 0.03 and fe <= 0.03:
         return '0303'
@@ -28,7 +28,7 @@ def assign_grade(si, fe):
         return '2050'
     return None
 
-# Streamlit app layout
+# Initialising Streamlit, since this is hosted on github and has an ML output file, streamlit was suggested to be best to run, by research.
 st.title("Tapping Schedule")
 st.write("Upload cell purity Excel file to generate the tapping schedule.")
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
@@ -252,20 +252,20 @@ if uploaded_file is not None:
                 })
 
         # Display the results
-        st.subheader("Pairing for cells with off-grade purity:")
-        st.dataframe(pd.DataFrame(closest_improving_data))
+        # st.subheader("Pairing for cells with off-grade purity:")
+        # st.dataframe(pd.DataFrame(closest_improving_data))
 
-        st.subheader("Pairs for 0303, 0404 and 0406 cells:")
-        st.dataframe(pd.DataFrame(pairable_grades_data))
+        # st.subheader("Pairs for 0303, 0404 and 0406 cells:")
+        # st.dataframe(pd.DataFrame(pairable_grades_data))
 
-        st.subheader("Pairs for 0506, 0610, P1020 cells:")
-        st.dataframe(pd.DataFrame(acceptable_pairings_data))
+        # st.subheader("Pairs for 0506, 0610, P1020 cells:")
+        # st.dataframe(pd.DataFrame(acceptable_pairings_data))
 
-        st.subheader("Pairs for an auto-trim, which optimized a P1020+ cell:")
-        st.dataframe(pd.DataFrame(additional_pairings))
+        # st.subheader("Pairs for an auto-trim, which optimized a P1020+ cell:")
+        # st.dataframe(pd.DataFrame(additional_pairings))
 
-        st.subheader("Standalone cells:")
-        st.dataframe(pd.DataFrame(remaining_cells))
+        # st.subheader("Standalone cells:")
+        # st.dataframe(pd.DataFrame(remaining_cells))
 
 
                 # Combine all pairings and unpaired data into a summary table
@@ -313,7 +313,7 @@ if uploaded_file is not None:
                 "Resultant_Grade": cell["Grade"]
             })
         
-        # Convert the summary to a DataFrame for display
+        # Convert the summary to a DataFrame to display a table
         summary_df = pd.DataFrame(summary_data)
         
         # Display the overall summary table
@@ -321,13 +321,13 @@ if uploaded_file is not None:
         st.dataframe(summary_df)
 
 
-                # Optionally, save results to an Excel file
+    
         output_data = {
-            "Poor Grades Bettered": closest_improving_data,  # Shortened
-            "Non-Improved Grades": pairable_grades_data,      # Shortened
-            "Acceptable Grades": acceptable_pairings_data,     # Shortened
-            "Acceptable & Non-Improved": additional_pairings,  # Shortened
-            "Remaining Cells": remaining_cells                 # Shortened
+            "Poor Grades Bettered": closest_improving_data,  
+            "Non-Improved Grades": pairable_grades_data,     
+            "Acceptable Grades": acceptable_pairings_data,    
+            "Acceptable & Non-Improved": additional_pairings, 
+            "Remaining Cells": remaining_cells       
         }
 
 
