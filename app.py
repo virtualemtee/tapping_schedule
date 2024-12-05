@@ -10,15 +10,15 @@ label_encoder = joblib.load('label_encoder.pkl')
 
 # Cell Purity based on Si and Fe values
 def assign_grade(si, fe):
-    if si <= 0.035 and fe <= 0.035:
+    if si <= 0.034 and fe <= 0.034:
         return '0303'
-    elif si <= 0.045 and fe <= 0.045:
+    elif si <= 0.044 and fe <= 0.044:
         return '0404'
-    elif si <= 0.045 and fe <= 0.065:
+    elif si <= 0.044 and fe <= 0.064:
         return '0406'
-    elif si <= 0.055 and fe <= 0.065:
+    elif si <= 0.054 and fe <= 0.064:
         return '0506'
-    elif si <= 0.065 and fe <= 0.10:
+    elif si <= 0.064 and fe <= 0.10:
         return '0610'
     elif si <= 0.10 and fe <= 0.20:
         return '1020'
